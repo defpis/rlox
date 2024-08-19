@@ -1,45 +1,20 @@
-use std::{
-    env,
-    fs::File,
-    io::{self, Read, Write},
-    process,
-};
+use std::{env, process};
+
+mod lox;
+mod scanner;
+mod token;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
     let argc = args.len();
 
+    // check exit code by `echo $?`
     if argc > 2 {
         println!("Usage: lox[ script]");
-        process::exit(-1);
+        process::exit(-1); // 255
     } else if argc == 2 {
-        run_file(&args[1])
+        lox::run_file(&args[1]) // 0
     } else {
-        run_repl();
-    }
-}
-
-fn run_file(path: &str) {
-    let mut file = File::open(&path).unwrap();
-
-    let mut content = String::new();
-    file.read_to_string(&mut content).unwrap();
-
-    println!("{}", content);
-}
-
-fn run_repl() {
-    let mut input = String::new();
-
-    loop {
-        input.clear();
-
-        print!(">>> ");
-        io::stdout().flush().unwrap();
-
-        io::stdin().read_line(&mut input).unwrap();
-        let input = input.trim();
-
-        println!("{}", input);
+        lox::run_repl(); // 130
     }
 }
