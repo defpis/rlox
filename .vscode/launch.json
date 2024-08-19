@@ -1,0 +1,16 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug executable 'rlox'",
+      "cargo": {
+        "args": ["build", "--bin=rlox", "--package=rlox"],
+        "filter": { "name": "rlox", "kind": "bin" }
+      },
+      "args": ["/Users/bytedance/Desktop/rlox/hello.lox"],
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}
