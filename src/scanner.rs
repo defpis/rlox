@@ -1,15 +1,14 @@
+use crate::token::{Token, TokenType};
 use std::{collections::HashMap, sync::LazyLock};
 
-use crate::token::{Token, TokenType};
-
 pub struct Scanner {
-    // input
+    // Input
     chars: Vec<char>,
-    // states
+    // States
     start: usize,
     current: usize,
     line: usize,
-    // output
+    // Output
     tokens: Vec<Token>,
 }
 
@@ -49,7 +48,7 @@ static KEYWORDS: LazyLock<HashMap<&str, TokenType>> = LazyLock::new(|| {
 });
 
 impl Scanner {
-    pub fn new(code: &str) -> Self {
+    pub fn new(code: &str) -> Scanner {
         Scanner {
             chars: code.chars().collect(),
             start: 0,
@@ -65,11 +64,8 @@ impl Scanner {
             self.scan_token()
         }
 
-        self.tokens.push(Token {
-            token_type: TokenType::Eof,
-            lexeme: String::from(""),
-            line: self.line,
-        });
+        self.tokens
+            .push(Token::new(TokenType::Eof, String::from(""), self.line));
 
         &self.tokens
     }
@@ -78,10 +74,13 @@ impl Scanner {
         self.current >= self.chars.len()
     }
 
-    fn advance(&mut self) -> &char {
-        let char = self.chars.get(self.current).unwrap(); // Protected by is_at_end()
-        self.current += 1;
-        char
+    // Protected by is_at_end()
+    fn advance(&mut self) -> char {
+        if let Some(char) = self.peek() {
+            self.current += 1;
+            return char;
+        }
+        panic!("Unreachable Error!");
     }
 
     fn find(&mut self, char: char) -> bool {
@@ -89,41 +88,33 @@ impl Scanner {
             return false;
         }
 
-        if *self.chars.get(self.current).unwrap() != char {
-            return false;
+        if let Some(c) = self.peek() {
+            if c != char {
+                return false;
+            }
         }
 
         self.current += 1;
         true
     }
 
-    fn peek(&self) -> Option<char> {
-        if self.is_at_end() {
-            return None;
-        };
-
-        Some(*self.chars.get(self.current).unwrap())
-    }
-
-    fn peek_next(&self) -> Option<char> {
-        let next = self.current + 1;
-
-        if next >= self.chars.len() {
+    fn peek_at(&self, idx: usize) -> Option<char> {
+        if idx >= self.chars.len() {
             return None;
         }
 
-        Some(*self.chars.get(next).unwrap())
+        Some(*self.chars.get(idx).unwrap())
+    }
+
+    fn peek(&self) -> Option<char> {
+        self.peek_at(self.current)
     }
 
     fn add_token(&mut self, token_type: TokenType) {
         let slice = &self.chars[self.start..self.current];
         let lexeme = String::from_iter(slice);
 
-        self.tokens.push(Token {
-            token_type,
-            lexeme,
-            line: self.line,
-        })
+        self.tokens.push(Token::new(token_type, lexeme, self.line));
     }
 
     fn string(&mut self) {
@@ -157,7 +148,7 @@ impl Scanner {
         }
 
         if let Some('.') = self.peek() {
-            if let Some(char) = self.peek_next() {
+            if let Some(char) = self.peek_at(self.current + 1) {
                 if is_digit(char) {
                     self.advance();
 
@@ -215,7 +206,7 @@ impl Scanner {
                         self.advance();
                     }
                 } else {
-                    self.add_token(TokenType::Slash)
+                    self.add_token(TokenType::Slash);
                 }
             }
 
@@ -258,12 +249,12 @@ impl Scanner {
             '"' => self.string(),
 
             char => {
-                if is_digit(*char) {
-                    self.number()
-                } else if is_alpha(*char) {
-                    self.identifier()
+                if is_digit(char) {
+                    self.number();
+                } else if is_alpha(char) {
+                    self.identifier();
                 } else {
-                    panic!("[line {}]: Unknown Character.", self.line)
+                    panic!("[line {}]: Unknown Character.", self.line);
                 }
             }
         }

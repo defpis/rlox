@@ -1,14 +1,11 @@
+use rlox::lox;
 use std::{env, process};
-
-mod lox;
-mod scanner;
-mod token;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
     let argc = args.len();
 
-    // check exit code by `echo $?`
+    // Check exit code by `echo $?`
     if argc > 2 {
         println!("Usage: lox[ script]");
         process::exit(-1); // 255

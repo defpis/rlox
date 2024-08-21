@@ -1,5 +1,4 @@
 use crate::scanner::Scanner;
-
 use std::{
     fs::File,
     io::{self, Read, Write},
