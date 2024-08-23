@@ -1,3 +1,5 @@
+use crate::object::Object;
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum TokenType {
     // Single-character tokens
@@ -53,14 +55,16 @@ pub enum TokenType {
 pub struct Token {
     pub token_type: TokenType,
     pub lexeme: String,
+    pub literal: Object,
     pub line: usize,
 }
 
 impl Token {
-    pub fn new(token_type: TokenType, lexeme: String, line: usize) -> Token {
+    pub fn new(token_type: TokenType, lexeme: String, literal: Object, line: usize) -> Token {
         Token {
             token_type,
             lexeme,
+            literal,
             line,
         }
     }

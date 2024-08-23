@@ -1,5 +1,8 @@
-use crate::token::{Token, TokenType};
-use std::{collections::HashMap, sync::LazyLock};
+use crate::{
+    object::Object,
+    token::{Token, TokenType},
+};
+use std::{collections::HashMap, f64, sync::LazyLock};
 
 pub struct Scanner {
     // Input
@@ -10,18 +13,6 @@ pub struct Scanner {
     line: usize,
     // Output
     tokens: Vec<Token>,
-}
-
-fn is_digit(char: char) -> bool {
-    char >= '0' && char <= '9'
-}
-
-fn is_alpha(char: char) -> bool {
-    (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || char == '_'
-}
-
-fn is_alpha_numeric(char: char) -> bool {
-    is_alpha(char) || is_digit(char)
 }
 
 static KEYWORDS: LazyLock<HashMap<&str, TokenType>> = LazyLock::new(|| {
@@ -48,6 +39,18 @@ static KEYWORDS: LazyLock<HashMap<&str, TokenType>> = LazyLock::new(|| {
 });
 
 impl Scanner {
+    fn is_digit(char: char) -> bool {
+        char >= '0' && char <= '9'
+    }
+
+    fn is_alpha(char: char) -> bool {
+        (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || char == '_'
+    }
+
+    fn is_alpha_numeric(char: char) -> bool {
+        Scanner::is_alpha(char) || Scanner::is_digit(char)
+    }
+
     pub fn new(code: &str) -> Scanner {
         Scanner {
             chars: code.chars().collect(),
@@ -60,42 +63,37 @@ impl Scanner {
 
     pub fn scan_tokens(&mut self) -> &Vec<Token> {
         while !self.is_at_end() {
-            self.start = self.current;
             self.scan_token()
         }
 
-        self.tokens
-            .push(Token::new(TokenType::Eof, String::from(""), self.line));
+        self.tokens.push(Token::new(
+            TokenType::Eof,
+            String::from(""),
+            Object::None,
+            self.line,
+        ));
 
         &self.tokens
     }
 
     fn is_at_end(&self) -> bool {
-        self.current >= self.chars.len()
+        !self.peek().is_some()
     }
 
-    // Protected by is_at_end()
     fn advance(&mut self) -> char {
-        if let Some(char) = self.peek() {
-            self.current += 1;
-            return char;
-        }
-        panic!("Unreachable Error!");
+        self.current += 1;
+        return self.previous();
     }
 
     fn find(&mut self, char: char) -> bool {
-        if self.is_at_end() {
-            return false;
-        }
-
-        if let Some(c) = self.peek() {
-            if c != char {
-                return false;
+        self.peek().map_or(false, |x| {
+            if x == char {
+                self.current += 1;
+                true
+            } else {
+                false
             }
-        }
-
-        self.current += 1;
-        true
+        })
     }
 
     fn peek_at(&self, idx: usize) -> Option<char> {
@@ -103,62 +101,64 @@ impl Scanner {
             return None;
         }
 
-        Some(*self.chars.get(idx).unwrap())
+        Some(self.chars[idx])
     }
 
     fn peek(&self) -> Option<char> {
         self.peek_at(self.current)
     }
 
+    fn previous(&self) -> char {
+        self.peek_at(self.current - 1).unwrap()
+    }
+
     fn add_token(&mut self, token_type: TokenType) {
         let slice = &self.chars[self.start..self.current];
         let lexeme = String::from_iter(slice);
 
-        self.tokens.push(Token::new(token_type, lexeme, self.line));
+        let literal = match token_type {
+            TokenType::Number => Object::Number(lexeme.parse::<f64>().unwrap()),
+            TokenType::String => Object::String(String::from_iter(
+                &self.chars[self.start + 1..self.current - 1],
+            )),
+            _ => Object::None,
+        };
+
+        self.tokens
+            .push(Token::new(token_type, lexeme, literal, self.line));
     }
 
     fn string(&mut self) {
         while let Some(char) = self.peek() {
-            if char == '"' {
-                break;
+            match char {
+                '"' => {
+                    self.advance();
+                    self.add_token(TokenType::String);
+                    return;
+                }
+                '\n' => self.line += 1,
+                _ => {
+                    self.advance();
+                }
             }
-
-            if char == '\n' {
-                self.line += 1;
-            }
-
-            self.advance();
         }
 
-        if self.is_at_end() {
-            panic!("[line {}]: Unterminated string.", self.line);
-        }
-
-        self.advance();
-
-        self.add_token(TokenType::String);
+        panic!("[line {}] : Unterminated string.", self.line);
     }
 
     fn number(&mut self) {
-        while let Some(char) = self.peek() {
-            if !is_digit(char) {
-                break;
-            }
+        while self.peek().map_or(false, Scanner::is_digit) {
             self.advance();
         }
 
-        if let Some('.') = self.peek() {
-            if let Some(char) = self.peek_at(self.current + 1) {
-                if is_digit(char) {
-                    self.advance();
-
-                    while let Some(char) = self.peek() {
-                        if !is_digit(char) {
-                            break;
-                        }
-                        self.advance();
-                    }
-                }
+        if self.peek() == Some('.')
+            && self
+                .peek_at(self.current + 1)
+                .map_or(false, Scanner::is_digit)
+        {
+            self.advance();
+            while self.peek().map_or(false, Scanner::is_digit) {
+                self.advance();
             }
         }
 
@@ -166,25 +166,24 @@ impl Scanner {
     }
 
     fn identifier(&mut self) {
-        while let Some(char) = self.peek() {
-            if !is_alpha_numeric(char) {
-                break;
-            }
+        while self.peek().map_or(false, Scanner::is_alpha_numeric) {
             self.advance();
         }
 
         let slice = &self.chars[self.start..self.current];
         let lexeme = String::from_iter(slice);
-        let token_type = if let Some(token_type) = KEYWORDS.get(lexeme.as_str()) {
-            token_type.clone()
-        } else {
-            TokenType::Identifier
-        };
+
+        let token_type = KEYWORDS
+            .get(lexeme.as_str())
+            .cloned()
+            .unwrap_or(TokenType::Identifier);
 
         self.add_token(token_type);
     }
 
     fn scan_token(&mut self) {
+        self.start = self.current;
+
         let char = self.advance();
 
         match char {
@@ -199,10 +198,7 @@ impl Scanner {
 
             '/' => {
                 if self.find('/') {
-                    while let Some(char) = self.peek() {
-                        if char == '\n' {
-                            break;
-                        }
+                    while self.peek().map_or(false, |x| x != '\n') {
                         self.advance();
                     }
                 } else {
@@ -249,12 +245,12 @@ impl Scanner {
             '"' => self.string(),
 
             char => {
-                if is_digit(char) {
+                if Scanner::is_digit(char) {
                     self.number();
-                } else if is_alpha(char) {
+                } else if Scanner::is_alpha(char) {
                     self.identifier();
                 } else {
-                    panic!("[line {}]: Unknown Character.", self.line);
+                    panic!("[line {}] : Unknown Character.", self.line);
                 }
             }
         }
