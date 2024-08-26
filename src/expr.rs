@@ -23,7 +23,7 @@ impl fmt::Display for Expr {
 #[derive(Debug, PartialEq, Clone)]
 pub struct BinaryExpr {
     pub left: Box<Expr>,
-    pub operator: Token,
+    pub op: Token,
     pub right: Box<Expr>,
 }
 
@@ -31,7 +31,7 @@ impl BinaryExpr {
     pub fn new(left: Expr, operator: Token, right: Expr) -> BinaryExpr {
         BinaryExpr {
             left: Box::new(left),
-            operator,
+            op: operator,
             right: Box::new(right),
         }
     }
@@ -39,7 +39,7 @@ impl BinaryExpr {
 
 impl fmt::Display for BinaryExpr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "({} {} {})", self.operator.lexeme, self.left, self.right)
+        write!(f, "({} {} {})", self.op.lexeme, self.left, self.right)
     }
 }
 
@@ -109,10 +109,10 @@ mod tests {
     fn test_display() {
         let expression = Expr::Binary(BinaryExpr::new(
             Expr::Unary(UnaryExpr::new(
-                Token::new(TokenType::Minus, "-".to_string(), Object::None, 1),
+                Token::new(TokenType::Minus, "-".to_string(), Object::Nil, 1),
                 Expr::Literal(LiteralExpr::new(Object::Number(123.))),
             )),
-            Token::new(TokenType::Star, "*".to_string(), Object::None, 1),
+            Token::new(TokenType::Star, "*".to_string(), Object::Nil, 1),
             Expr::Grouping(GroupingExpr::new(Expr::Literal(LiteralExpr::new(
                 Object::Number(45.67),
             )))),

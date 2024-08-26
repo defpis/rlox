@@ -4,15 +4,29 @@ use crate::{
 };
 use std::{collections::HashMap, f64, sync::LazyLock};
 
-pub struct Scanner {
-    // Input
+pub fn scan_tokens(code: &str) -> Vec<Token> {
+    let chars: Vec<char> = code.chars().collect(); // utf-8
+
+    let mut scanner = Scanner::new(chars);
+    let mut tokens: Vec<Token> = Vec::new();
+
+    while !scanner.is_at_end() {
+        match scanner.scan_token() {
+            Some(token) => tokens.push(token),
+            None => (),
+        }
+    }
+
+    tokens.push(scanner.eof());
+
+    tokens
+}
+
+struct Scanner {
     chars: Vec<char>,
-    // States
     start: usize,
     current: usize,
     line: usize,
-    // Output
-    tokens: Vec<Token>,
 }
 
 static KEYWORDS: LazyLock<HashMap<&str, TokenType>> = LazyLock::new(|| {
@@ -51,29 +65,17 @@ impl Scanner {
         Scanner::is_alpha(char) || Scanner::is_digit(char)
     }
 
-    pub fn new(code: &str) -> Scanner {
+    fn new(chars: Vec<char>) -> Scanner {
         Scanner {
-            chars: code.chars().collect(),
+            chars,
             start: 0,
             current: 0,
             line: 1,
-            tokens: Vec::new(),
         }
     }
 
-    pub fn scan_tokens(&mut self) -> &Vec<Token> {
-        while !self.is_at_end() {
-            self.scan_token()
-        }
-
-        self.tokens.push(Token::new(
-            TokenType::Eof,
-            String::from(""),
-            Object::None,
-            self.line,
-        ));
-
-        &self.tokens
+    fn eof(&self) -> Token {
+        Token::new(TokenType::Eof, String::from(""), Object::Nil, self.line)
     }
 
     fn is_at_end(&self) -> bool {
@@ -82,7 +84,7 @@ impl Scanner {
 
     fn advance(&mut self) -> char {
         self.current += 1;
-        return self.previous();
+        self.previous()
     }
 
     fn find(&mut self, char: char) -> bool {
@@ -112,7 +114,7 @@ impl Scanner {
         self.peek_at(self.current - 1).unwrap()
     }
 
-    fn add_token(&mut self, token_type: TokenType) {
+    fn token(&mut self, token_type: TokenType) -> Option<Token> {
         let slice = &self.chars[self.start..self.current];
         let lexeme = String::from_iter(slice);
 
@@ -121,22 +123,22 @@ impl Scanner {
             TokenType::String => Object::String(String::from_iter(
                 &self.chars[self.start + 1..self.current - 1],
             )),
-            _ => Object::None,
+            _ => Object::Nil,
         };
 
-        self.tokens
-            .push(Token::new(token_type, lexeme, literal, self.line));
+        Some(Token::new(token_type, lexeme, literal, self.line))
     }
 
-    fn string(&mut self) {
+    fn string(&mut self) -> Option<Token> {
         while let Some(char) = self.peek() {
             match char {
                 '"' => {
                     self.advance();
-                    self.add_token(TokenType::String);
-                    return;
+                    return self.token(TokenType::String);
                 }
-                '\n' => self.line += 1,
+                '\n' => {
+                    self.line += 1;
+                }
                 _ => {
                     self.advance();
                 }
@@ -146,7 +148,7 @@ impl Scanner {
         panic!("[line {}] : Unterminated string.", self.line);
     }
 
-    fn number(&mut self) {
+    fn number(&mut self) -> Option<Token> {
         while self.peek().map_or(false, Scanner::is_digit) {
             self.advance();
         }
@@ -162,10 +164,10 @@ impl Scanner {
             }
         }
 
-        self.add_token(TokenType::Number);
+        self.token(TokenType::Number)
     }
 
-    fn identifier(&mut self) {
+    fn identifier(&mut self) -> Option<Token> {
         while self.peek().map_or(false, Scanner::is_alpha_numeric) {
             self.advance();
         }
@@ -178,77 +180,81 @@ impl Scanner {
             .cloned()
             .unwrap_or(TokenType::Identifier);
 
-        self.add_token(token_type);
+        self.token(token_type)
     }
 
-    fn scan_token(&mut self) {
+    fn scan_token(&mut self) -> Option<Token> {
         self.start = self.current;
 
         let char = self.advance();
 
         match char {
-            '(' => self.add_token(TokenType::LeftParen),
-            ')' => self.add_token(TokenType::RightParen),
-            '{' => self.add_token(TokenType::LeftBrace),
-            '}' => self.add_token(TokenType::RightBrace),
+            '(' => self.token(TokenType::LeftParen),
+            ')' => self.token(TokenType::RightParen),
+            '{' => self.token(TokenType::LeftBrace),
+            '}' => self.token(TokenType::RightBrace),
 
-            '+' => self.add_token(TokenType::Plus),
-            '-' => self.add_token(TokenType::Minus),
-            '*' => self.add_token(TokenType::Star),
+            '+' => self.token(TokenType::Plus),
+            '-' => self.token(TokenType::Minus),
+            '*' => self.token(TokenType::Star),
 
             '/' => {
                 if self.find('/') {
                     while self.peek().map_or(false, |x| x != '\n') {
                         self.advance();
                     }
+                    None
                 } else {
-                    self.add_token(TokenType::Slash);
+                    self.token(TokenType::Slash)
                 }
             }
 
             '!' => {
                 if self.find('=') {
-                    self.add_token(TokenType::BangEqual);
+                    self.token(TokenType::BangEqual)
                 } else {
-                    self.add_token(TokenType::Bang);
+                    self.token(TokenType::Bang)
                 }
             }
             '=' => {
                 if self.find('=') {
-                    self.add_token(TokenType::EqualEqual);
+                    self.token(TokenType::EqualEqual)
                 } else {
-                    self.add_token(TokenType::Equal);
+                    self.token(TokenType::Equal)
                 }
             }
             '>' => {
                 if self.find('=') {
-                    self.add_token(TokenType::GreaterEqual);
+                    self.token(TokenType::GreaterEqual)
                 } else {
-                    self.add_token(TokenType::Greater);
+                    self.token(TokenType::Greater)
                 }
             }
             '<' => {
                 if self.find('=') {
-                    self.add_token(TokenType::LessEqual);
+                    self.token(TokenType::LessEqual)
                 } else {
-                    self.add_token(TokenType::Less);
+                    self.token(TokenType::Less)
                 }
             }
 
-            '.' => self.add_token(TokenType::Dot),
-            ',' => self.add_token(TokenType::Comma),
-            ';' => self.add_token(TokenType::Semicolon),
+            '.' => self.token(TokenType::Dot),
+            ',' => self.token(TokenType::Comma),
+            ';' => self.token(TokenType::Semicolon),
 
-            ' ' | '\r' | '\t' => (),
-            '\n' => self.line += 1,
+            ' ' | '\r' | '\t' => None,
+            '\n' => {
+                self.line += 1;
+                None
+            }
 
             '"' => self.string(),
 
             char => {
                 if Scanner::is_digit(char) {
-                    self.number();
+                    self.number()
                 } else if Scanner::is_alpha(char) {
-                    self.identifier();
+                    self.identifier()
                 } else {
                     panic!("[line {}] : Unknown Character.", self.line);
                 }

@@ -1,4 +1,4 @@
-use crate::{parser::Parser, scanner::Scanner};
+use crate::{interpreter::interpret, parser::parse, scanner::scan_tokens};
 use std::{
     fs::File,
     io::{self, Read, Write},
@@ -30,9 +30,14 @@ pub fn run_repl() {
 }
 
 fn run_code(code: &str) {
-    let mut scanner = Scanner::new(&code);
-    let tokens = scanner.scan_tokens();
+    let tokens = scan_tokens(code);
+    // println!("{:?}", tokens);
 
-    let mut parser = Parser::new(&tokens);
-    println!("{:?}", parser.parse())
+    let Some(expr) = parse(tokens) else {
+        return;
+    };
+    // println!("{:?}", expr);
+
+    let value = interpret(expr);
+    println!("{}", value);
 }

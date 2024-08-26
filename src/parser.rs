@@ -4,25 +4,26 @@ use crate::{
     token::{Token, TokenType},
 };
 
-pub struct Parser<'a> {
-    tokens: &'a Vec<Token>,
+pub fn parse(tokens: Vec<Token>) -> Option<Expr> {
+    let mut parser = Parser::new(tokens);
+    if parser.is_at_end() {
+        return None;
+    }
+    Some(parser.expression())
+}
+
+struct Parser {
+    tokens: Vec<Token>,
     current: usize,
 }
 
-impl<'a> Parser<'a> {
-    pub fn new(tokens: &'a Vec<Token>) -> Parser {
+impl Parser {
+    fn new(tokens: Vec<Token>) -> Parser {
         Parser { tokens, current: 0 }
     }
 
     fn is_at_end(&self) -> bool {
         self.peek().map_or(true, |x| x.token_type == TokenType::Eof)
-    }
-
-    pub fn parse(&mut self) -> Option<Expr> {
-        if self.is_at_end() {
-            return None;
-        }
-        Some(self.expression())
     }
 
     fn peek_at(&self, idx: usize) -> Option<&Token> {
@@ -58,10 +59,10 @@ impl<'a> Parser<'a> {
         false
     }
 
-    fn consume(&mut self, token_type: TokenType, message: &str) -> &Token {
+    fn consume(&mut self, token_type: &TokenType, message: &str) -> &Token {
         let token = self.peek().unwrap();
 
-        match self.check(&token_type) {
+        match self.check(token_type) {
             true => self.advance(),
             false => panic!("[line {}] <{:?}> : {}", token.line, token, message),
         }
@@ -138,15 +139,15 @@ impl<'a> Parser<'a> {
         let token = self.advance();
 
         match token.token_type {
-            TokenType::False => Expr::Literal(LiteralExpr::new(Object::Bool(false))),
-            TokenType::True => Expr::Literal(LiteralExpr::new(Object::Bool(true))),
-            TokenType::Nil => Expr::Literal(LiteralExpr::new(Object::None)),
+            TokenType::False => Expr::Literal(LiteralExpr::new(Object::Boolean(false))),
+            TokenType::True => Expr::Literal(LiteralExpr::new(Object::Boolean(true))),
+            TokenType::Nil => Expr::Literal(LiteralExpr::new(Object::Nil)),
             TokenType::Number | TokenType::String => {
                 Expr::Literal(LiteralExpr::new(self.previous().literal.clone()))
             }
             TokenType::LeftParen => {
                 let expr = self.expression();
-                self.consume(TokenType::RightParen, "Expect ')' after expression.");
+                self.consume(&TokenType::RightParen, "Expect ')' after expression.");
                 Expr::Grouping(GroupingExpr::new(expr))
             }
             _ => panic!("[line {}] <{:?}> : Unexpected Token.", token.line, token),
