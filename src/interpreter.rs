@@ -29,16 +29,16 @@ impl Visitor<Object> for Interpreter {
             Expr::Unary(expr) => {
                 let right = self.visit_expr(&expr.right);
 
-                match expr.operator.token_type {
+                match expr.op.token_type {
                     TokenType::Minus => match right {
                         Object::Number(n) => Object::Number(-n),
                         _ => panic!(
                             "[line {}] <{:?}> : Operator must be a number.",
-                            expr.operator.line, expr.operator
+                            expr.op.line, expr.op
                         ),
                     },
                     TokenType::Bang => Object::Boolean(!right.is_truthy()),
-                    _ => panic!("Unreachable Error!"),
+                    _ => panic!("Unreachable error!"),
                 }
             }
             Expr::Binary(expr) => {
@@ -113,7 +113,7 @@ impl Visitor<Object> for Interpreter {
                     },
                     TokenType::BangEqual => Object::Boolean(left != right),
                     TokenType::EqualEqual => Object::Boolean(left == right),
-                    _ => panic!("Unreachable Error!"),
+                    _ => panic!("Unreachable error!"),
                 }
             }
         }

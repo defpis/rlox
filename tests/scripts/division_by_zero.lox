@@ -1,0 +1,3 @@
+1 / 0
+------ error ------
+[line 1] <Token { token_type: Slash, lexeme: "/", literal: Nil, line: 1 }> : Division by zero.

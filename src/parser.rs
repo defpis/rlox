@@ -6,10 +6,11 @@ use crate::{
 
 pub fn parse(tokens: Vec<Token>) -> Option<Expr> {
     let mut parser = Parser::new(tokens);
-    if parser.is_at_end() {
-        return None;
+    let mut expr: Option<Expr> = None;
+    while !parser.is_at_end() {
+        expr = Some(parser.expression())
     }
-    Some(parser.expression())
+    expr
 }
 
 struct Parser {
@@ -76,9 +77,9 @@ impl Parser {
         let mut expr = self.comparison();
 
         while self.find(&[TokenType::BangEqual, TokenType::EqualEqual]) {
-            let operator = self.previous().clone();
+            let op = self.previous().clone();
             let right = self.comparison();
-            expr = Expr::Binary(BinaryExpr::new(expr, operator, right));
+            expr = Expr::Binary(BinaryExpr::new(expr, op, right));
         }
 
         expr
@@ -93,9 +94,9 @@ impl Parser {
             TokenType::Less,
             TokenType::LessEqual,
         ]) {
-            let operator = self.previous().clone();
+            let op = self.previous().clone();
             let right = self.term();
-            expr = Expr::Binary(BinaryExpr::new(expr, operator, right));
+            expr = Expr::Binary(BinaryExpr::new(expr, op, right));
         }
 
         expr
@@ -105,9 +106,9 @@ impl Parser {
         let mut expr = self.factor();
 
         while self.find(&[TokenType::Minus, TokenType::Plus]) {
-            let operator = self.previous().clone();
+            let op = self.previous().clone();
             let right = self.factor();
-            expr = Expr::Binary(BinaryExpr::new(expr, operator, right));
+            expr = Expr::Binary(BinaryExpr::new(expr, op, right));
         }
 
         expr
@@ -117,9 +118,9 @@ impl Parser {
         let mut expr = self.unary();
 
         while self.find(&[TokenType::Slash, TokenType::Star]) {
-            let operator = self.previous().clone();
+            let op = self.previous().clone();
             let right = self.unary();
-            expr = Expr::Binary(BinaryExpr::new(expr, operator, right));
+            expr = Expr::Binary(BinaryExpr::new(expr, op, right));
         }
 
         expr
@@ -127,9 +128,9 @@ impl Parser {
 
     fn unary(&mut self) -> Expr {
         if self.find(&[TokenType::Bang, TokenType::Minus]) {
-            let operator = self.previous().clone();
+            let op = self.previous().clone();
             let right = self.unary();
-            return Expr::Unary(UnaryExpr::new(operator, right));
+            return Expr::Unary(UnaryExpr::new(op, right));
         }
 
         return self.primary();
@@ -143,14 +144,14 @@ impl Parser {
             TokenType::True => Expr::Literal(LiteralExpr::new(Object::Boolean(true))),
             TokenType::Nil => Expr::Literal(LiteralExpr::new(Object::Nil)),
             TokenType::Number | TokenType::String => {
-                Expr::Literal(LiteralExpr::new(self.previous().literal.clone()))
+                Expr::Literal(LiteralExpr::new(token.literal.clone()))
             }
             TokenType::LeftParen => {
                 let expr = self.expression();
                 self.consume(&TokenType::RightParen, "Expect ')' after expression.");
                 Expr::Grouping(GroupingExpr::new(expr))
             }
-            _ => panic!("[line {}] <{:?}> : Unexpected Token.", token.line, token),
+            _ => panic!("[line {}] <{:?}> : Unexpected token.", token.line, token),
         }
     }
 }

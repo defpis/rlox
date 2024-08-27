@@ -28,10 +28,10 @@ pub struct BinaryExpr {
 }
 
 impl BinaryExpr {
-    pub fn new(left: Expr, operator: Token, right: Expr) -> BinaryExpr {
+    pub fn new(left: Expr, op: Token, right: Expr) -> BinaryExpr {
         BinaryExpr {
             left: Box::new(left),
-            op: operator,
+            op,
             right: Box::new(right),
         }
     }
@@ -81,14 +81,14 @@ impl fmt::Display for LiteralExpr {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct UnaryExpr {
-    pub operator: Token,
+    pub op: Token,
     pub right: Box<Expr>,
 }
 
 impl UnaryExpr {
-    pub fn new(operator: Token, right: Expr) -> UnaryExpr {
+    pub fn new(op: Token, right: Expr) -> UnaryExpr {
         UnaryExpr {
-            operator,
+            op,
             right: Box::new(right),
         }
     }
@@ -96,31 +96,6 @@ impl UnaryExpr {
 
 impl fmt::Display for UnaryExpr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "({} {})", self.operator.lexeme, self.right)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::token::TokenType;
-
-    #[test]
-    fn test_display() {
-        let expression = Expr::Binary(BinaryExpr::new(
-            Expr::Unary(UnaryExpr::new(
-                Token::new(TokenType::Minus, "-".to_string(), Object::Nil, 1),
-                Expr::Literal(LiteralExpr::new(Object::Number(123.))),
-            )),
-            Token::new(TokenType::Star, "*".to_string(), Object::Nil, 1),
-            Expr::Grouping(GroupingExpr::new(Expr::Literal(LiteralExpr::new(
-                Object::Number(45.67),
-            )))),
-        ));
-
-        assert_eq!(
-            expression.to_string(),
-            "(* (- 123) (group 45.67))".to_string()
-        );
+        write!(f, "({} {})", self.op.lexeme, self.right)
     }
 }

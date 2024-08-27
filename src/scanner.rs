@@ -99,11 +99,7 @@ impl Scanner {
     }
 
     fn peek_at(&self, idx: usize) -> Option<char> {
-        if idx >= self.chars.len() {
-            return None;
-        }
-
-        Some(self.chars[idx])
+        self.chars.get(idx).cloned()
     }
 
     fn peek(&self) -> Option<char> {
@@ -138,6 +134,7 @@ impl Scanner {
                 }
                 '\n' => {
                     self.line += 1;
+                    self.advance();
                 }
                 _ => {
                     self.advance();
@@ -161,6 +158,13 @@ impl Scanner {
             self.advance();
             while self.peek().map_or(false, Scanner::is_digit) {
                 self.advance();
+            }
+        }
+
+        if let Some(char) = self.peek() {
+            // `123abc` or `123.`
+            if Scanner::is_alpha(char) || char == '.' {
+                panic!("[line {}] : Invalid number.", self.line);
             }
         }
 
@@ -256,7 +260,7 @@ impl Scanner {
                 } else if Scanner::is_alpha(char) {
                     self.identifier()
                 } else {
-                    panic!("[line {}] : Unknown Character.", self.line);
+                    panic!("[line {}] : Unknown character.", self.line);
                 }
             }
         }

@@ -29,7 +29,7 @@ pub fn run_repl() {
     }
 }
 
-fn run_code(code: &str) {
+pub fn run_code(code: &str) {
     let tokens = scan_tokens(code);
     // println!("{:?}", tokens);
 
