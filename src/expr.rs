@@ -7,6 +7,8 @@ pub enum Expr {
     Grouping(GroupingExpr),
     Literal(LiteralExpr),
     Unary(UnaryExpr),
+    Variable(VariableExpr),
+    Assign(AssignExpr),
 }
 
 impl fmt::Display for Expr {
@@ -16,6 +18,8 @@ impl fmt::Display for Expr {
             Expr::Grouping(v) => v.fmt(f),
             Expr::Literal(v) => v.fmt(f),
             Expr::Unary(v) => v.fmt(f),
+            Expr::Variable(v) => v.fmt(f),
+            Expr::Assign(v) => v.fmt(f),
         }
     }
 }
@@ -58,7 +62,7 @@ impl GroupingExpr {
 
 impl fmt::Display for GroupingExpr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "(group {})", self.expression)
+        write!(f, "({})", self.expression)
     }
 }
 
@@ -68,8 +72,8 @@ pub struct LiteralExpr {
 }
 
 impl LiteralExpr {
-    pub fn new(literal: Object) -> LiteralExpr {
-        LiteralExpr { value: literal }
+    pub fn new(value: Object) -> LiteralExpr {
+        LiteralExpr { value }
     }
 }
 
@@ -97,5 +101,43 @@ impl UnaryExpr {
 impl fmt::Display for UnaryExpr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "({} {})", self.op.lexeme, self.right)
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct VariableExpr {
+    pub name: Token,
+}
+
+impl VariableExpr {
+    pub fn new(name: Token) -> VariableExpr {
+        VariableExpr { name }
+    }
+}
+
+impl fmt::Display for VariableExpr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.name.lexeme)
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct AssignExpr {
+    pub name: Token,
+    pub value: Box<Expr>,
+}
+
+impl AssignExpr {
+    pub fn new(name: Token, value: Expr) -> AssignExpr {
+        AssignExpr {
+            name,
+            value: Box::new(value),
+        }
+    }
+}
+
+impl fmt::Display for AssignExpr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} = {}", self.name.lexeme, self.value)
     }
 }

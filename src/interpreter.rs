@@ -1,23 +1,49 @@
-use crate::{expr::Expr, object::Object, token::TokenType};
+use crate::{environment::Environment, expr::Expr, object::Object, stmt::Stmt, token::TokenType};
+use std::{cell::RefCell, panic, rc::Rc};
 
-pub fn interpret(expr: Expr) -> Object {
+pub fn interpret(statements: Vec<Stmt>) {
     let mut interpreter = Interpreter::new();
-    interpreter.evaluate(&expr)
+    for statement in statements {
+        interpreter.execute(&statement)
+    }
 }
 
 trait Visitor<T> {
     fn visit_expr(&mut self, expr: &Expr) -> T;
+    fn visit_stmt(&mut self, stmt: &Stmt) -> ();
 }
 
-struct Interpreter {}
+struct Interpreter {
+    globals: Rc<RefCell<Environment>>,
+    environment: Rc<RefCell<Environment>>,
+}
 
 impl Interpreter {
     fn new() -> Interpreter {
-        Interpreter {}
+        let globals = Rc::new(RefCell::new(Environment::new(None)));
+        let environment = globals.clone();
+
+        Interpreter {
+            globals,
+            environment,
+        }
     }
 
     fn evaluate(&mut self, expr: &Expr) -> Object {
         self.visit_expr(expr)
+    }
+
+    fn execute(&mut self, stmt: &Stmt) {
+        self.visit_stmt(stmt);
+    }
+
+    fn execute_block(&mut self, statements: &Vec<Stmt>, environment: Rc<RefCell<Environment>>) {
+        let previous = self.environment.clone();
+        self.environment = environment;
+        for statement in statements {
+            self.execute(&statement);
+        }
+        self.environment = previous;
     }
 }
 
@@ -115,6 +141,40 @@ impl Visitor<Object> for Interpreter {
                     TokenType::EqualEqual => Object::Boolean(left == right),
                     _ => panic!("Unreachable error!"),
                 }
+            }
+            Expr::Variable(expr) => self.environment.borrow().get(&expr.name),
+            Expr::Assign(expr) => {
+                let value = self.evaluate(&expr.value);
+                self.environment.borrow_mut().assign(&expr.name, &value);
+                return value;
+            }
+        }
+    }
+    fn visit_stmt(&mut self, stmt: &Stmt) {
+        match stmt {
+            Stmt::Expression(stmt) => {
+                self.evaluate(&stmt.expression);
+            }
+            Stmt::Print(stmt) => {
+                let value = self.evaluate(&stmt.expression);
+                println!("{}", value);
+            }
+            Stmt::Var(stmt) => {
+                let mut value = Object::Nil;
+                if let Some(ref initializer) = stmt.initializer {
+                    value = self.evaluate(initializer);
+                }
+                self.environment
+                    .borrow_mut()
+                    .define(stmt.name.lexeme.clone(), value)
+            }
+            Stmt::Block(stmt) => {
+                self.execute_block(
+                    &stmt.statements,
+                    Rc::new(RefCell::new(Environment::new(Some(
+                        self.environment.clone(),
+                    )))),
+                );
             }
         }
     }

@@ -33,11 +33,8 @@ pub fn run_code(code: &str) {
     let tokens = scan_tokens(code);
     // println!("{:?}", tokens);
 
-    let Some(expr) = parse(tokens) else {
-        return;
-    };
-    // println!("{:?}", expr);
+    let statements = parse(tokens);
+    // println!("{:?}", statements);
 
-    let value = interpret(expr);
-    println!("{}", value);
+    interpret(statements);
 }

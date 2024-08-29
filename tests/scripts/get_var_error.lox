@@ -1,0 +1,3 @@
+print a;
+------ error ------
+[line 1] <Token { token_type: Identifier, lexeme: "a", literal: Nil, line: 1 }> : Undefined variable `a`.

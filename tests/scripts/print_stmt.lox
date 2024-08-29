@@ -1,0 +1,11 @@
+print "Hello World!";
+print 1 + 2;
+print true;
+print false;
+print nil;
+------ output ------
+Hello World!
+3
+true
+false
+nil

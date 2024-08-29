@@ -15,9 +15,6 @@ mod expr_test {
             )))),
         ));
 
-        assert_eq!(
-            expression.to_string(),
-            "(* (- 123) (group 45.67))".to_string()
-        );
+        assert_eq!(expression.to_string(), "(* (- 123) (45.67))".to_string());
     }
 }

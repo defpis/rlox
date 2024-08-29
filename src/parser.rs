@@ -1,16 +1,17 @@
 use crate::{
-    expr::{BinaryExpr, Expr, GroupingExpr, LiteralExpr, UnaryExpr},
+    expr::{AssignExpr, BinaryExpr, Expr, GroupingExpr, LiteralExpr, UnaryExpr, VariableExpr},
     object::Object,
+    stmt::{BlockStmt, ExpressionStmt, PrintStmt, Stmt, VarStmt},
     token::{Token, TokenType},
 };
 
-pub fn parse(tokens: Vec<Token>) -> Option<Expr> {
+pub fn parse(tokens: Vec<Token>) -> Vec<Stmt> {
     let mut parser = Parser::new(tokens);
-    let mut expr: Option<Expr> = None;
+    let mut statements: Vec<Stmt> = Vec::new();
     while !parser.is_at_end() {
-        expr = Some(parser.expression())
+        statements.push(parser.declaration())
     }
-    expr
+    statements
 }
 
 struct Parser {
@@ -69,8 +70,85 @@ impl Parser {
         }
     }
 
+    fn declaration(&mut self) -> Stmt {
+        if self.find(&[TokenType::Var]) {
+            return self.var_declaration();
+        }
+        self.statement()
+    }
+
+    fn var_declaration(&mut self) -> Stmt {
+        let name = self
+            .consume(&TokenType::Identifier, "Expect variable name.")
+            .clone();
+
+        let mut initializer: Option<Expr> = None;
+        if self.find(&[TokenType::Equal]) {
+            initializer = Some(self.expression());
+        }
+
+        self.consume(
+            &TokenType::Semicolon,
+            "Expect ';' after variable declaration.",
+        );
+
+        Stmt::Var(VarStmt::new(name, initializer))
+    }
+
+    fn statement(&mut self) -> Stmt {
+        if self.find(&[TokenType::Print]) {
+            return self.print_statement();
+        }
+        if self.find(&[TokenType::LeftBrace]) {
+            return Stmt::Block(BlockStmt::new(self.block()));
+        }
+        self.expression_statement()
+    }
+
+    fn block(&mut self) -> Vec<Stmt> {
+        let mut statements: Vec<Stmt> = Vec::new();
+
+        while !self.check(&TokenType::RightBrace) {
+            statements.push(self.declaration());
+        }
+
+        self.consume(&TokenType::RightBrace, "Expect '}' after block.");
+        statements
+    }
+
+    fn print_statement(&mut self) -> Stmt {
+        let value = self.expression();
+        self.consume(&TokenType::Semicolon, "Expect ';' after value.");
+        Stmt::Print(PrintStmt::new(value))
+    }
+
+    fn expression_statement(&mut self) -> Stmt {
+        let expr = self.expression();
+        self.consume(&TokenType::Semicolon, "Expect ';' after expression.");
+        Stmt::Expression(ExpressionStmt::new(expr))
+    }
+
     fn expression(&mut self) -> Expr {
-        self.equality()
+        self.assignment()
+    }
+
+    fn assignment(&mut self) -> Expr {
+        let expr = self.equality();
+
+        if self.find(&[TokenType::Equal]) {
+            let equals = self.previous().clone();
+            let value = self.assignment();
+
+            match expr {
+                Expr::Variable(expr) => {
+                    let name = expr.name;
+                    return Expr::Assign(AssignExpr::new(name, value));
+                }
+                _ => panic!("[line {}] : Invalid assignment target.", equals.line),
+            }
+        }
+
+        expr
     }
 
     fn equality(&mut self) -> Expr {
@@ -151,6 +229,7 @@ impl Parser {
                 self.consume(&TokenType::RightParen, "Expect ')' after expression.");
                 Expr::Grouping(GroupingExpr::new(expr))
             }
+            TokenType::Identifier => Expr::Variable(VariableExpr::new(token.clone())),
             _ => panic!("[line {}] <{:?}> : Unexpected token.", token.line, token),
         }
     }
