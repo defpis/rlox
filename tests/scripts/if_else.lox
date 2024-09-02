@@ -1,0 +1,14 @@
+if (1) {
+  print true;
+} else {
+  print false;
+}
+
+if (0) {
+  print true;
+} else {
+  print false;
+}
+------ output ------
+true
+false

@@ -2,24 +2,31 @@ use crate::{
     object::Object,
     token::{Token, TokenType},
 };
-use std::{collections::HashMap, f64, sync::LazyLock};
+use std::{collections::HashMap, f64, rc::Rc, sync::LazyLock};
 
-pub fn scan_tokens(code: &str) -> Vec<Token> {
+pub fn scan_tokens(code: &str) -> Vec<Rc<Token>> {
     let chars: Vec<char> = code.chars().collect(); // utf-8
 
     let mut scanner = Scanner::new(chars);
-    let mut tokens: Vec<Token> = Vec::new();
+    let mut tokens: Vec<Rc<Token>> = Vec::new();
 
     while !scanner.is_at_end() {
         match scanner.scan_token() {
-            Some(token) => tokens.push(token),
-            None => (),
+            Ok(token) => match token {
+                Some(token) => tokens.push(token),
+                None => (), // Skip
+            },
+            Err(err) => panic!("{}", err.msg),
         }
     }
 
     tokens.push(scanner.eof());
 
     tokens
+}
+
+struct ScannerError {
+    msg: String,
 }
 
 struct Scanner {
@@ -74,8 +81,13 @@ impl Scanner {
         }
     }
 
-    fn eof(&self) -> Token {
-        Token::new(TokenType::Eof, String::from(""), Object::Nil, self.line)
+    fn eof(&self) -> Rc<Token> {
+        Rc::new(Token::new(
+            TokenType::Eof,
+            String::from(""),
+            Object::Nil,
+            self.line,
+        ))
     }
 
     fn is_at_end(&self) -> bool {
@@ -110,7 +122,7 @@ impl Scanner {
         self.peek_at(self.current - 1).unwrap()
     }
 
-    fn token(&mut self, token_type: TokenType) -> Option<Token> {
+    fn token(&mut self, token_type: TokenType) -> Result<Option<Rc<Token>>, ScannerError> {
         let slice = &self.chars[self.start..self.current];
         let lexeme = String::from_iter(slice);
 
@@ -122,10 +134,12 @@ impl Scanner {
             _ => Object::Nil,
         };
 
-        Some(Token::new(token_type, lexeme, literal, self.line))
+        Ok(Some(Rc::new(Token::new(
+            token_type, lexeme, literal, self.line,
+        ))))
     }
 
-    fn string(&mut self) -> Option<Token> {
+    fn string(&mut self) -> Result<Option<Rc<Token>>, ScannerError> {
         while let Some(char) = self.peek() {
             match char {
                 '"' => {
@@ -142,10 +156,12 @@ impl Scanner {
             }
         }
 
-        panic!("[line {}] : Unterminated string.", self.line);
+        Err(ScannerError {
+            msg: format!("[line {}] : Unterminated string.", self.line),
+        })
     }
 
-    fn number(&mut self) -> Option<Token> {
+    fn number(&mut self) -> Result<Option<Rc<Token>>, ScannerError> {
         while self.peek().map_or(false, Scanner::is_digit) {
             self.advance();
         }
@@ -164,14 +180,16 @@ impl Scanner {
         if let Some(char) = self.peek() {
             // `123abc` or `123.`
             if Scanner::is_alpha(char) || char == '.' {
-                panic!("[line {}] : Invalid number.", self.line);
+                return Err(ScannerError {
+                    msg: format!("[line {}] : Invalid number.", self.line),
+                });
             }
         }
 
         self.token(TokenType::Number)
     }
 
-    fn identifier(&mut self) -> Option<Token> {
+    fn identifier(&mut self) -> Result<Option<Rc<Token>>, ScannerError> {
         while self.peek().map_or(false, Scanner::is_alpha_numeric) {
             self.advance();
         }
@@ -187,7 +205,7 @@ impl Scanner {
         self.token(token_type)
     }
 
-    fn scan_token(&mut self) -> Option<Token> {
+    fn scan_token(&mut self) -> Result<Option<Rc<Token>>, ScannerError> {
         self.start = self.current;
 
         let char = self.advance();
@@ -207,7 +225,7 @@ impl Scanner {
                     while self.peek().map_or(false, |x| x != '\n') {
                         self.advance();
                     }
-                    None
+                    Ok(None)
                 } else {
                     self.token(TokenType::Slash)
                 }
@@ -246,10 +264,10 @@ impl Scanner {
             ',' => self.token(TokenType::Comma),
             ';' => self.token(TokenType::Semicolon),
 
-            ' ' | '\r' | '\t' => None,
+            ' ' | '\r' | '\t' => Ok(None),
             '\n' => {
                 self.line += 1;
-                None
+                Ok(None)
             }
 
             '"' => self.string(),
@@ -260,7 +278,9 @@ impl Scanner {
                 } else if Scanner::is_alpha(char) {
                     self.identifier()
                 } else {
-                    panic!("[line {}] : Unknown character.", self.line);
+                    Err(ScannerError {
+                        msg: format!("[line {}] : Unknown character.", self.line),
+                    })
                 }
             }
         }

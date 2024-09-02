@@ -1,5 +1,5 @@
 use crate::{object::Object, token::Token};
-use std::fmt;
+use std::{fmt, rc::Rc};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Expr {
@@ -9,60 +9,55 @@ pub enum Expr {
     Unary(UnaryExpr),
     Variable(VariableExpr),
     Assign(AssignExpr),
+    Logical(LogicalExpr),
+    Call(CallExpr),
 }
 
 impl fmt::Display for Expr {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Expr::Binary(v) => v.fmt(f),
-            Expr::Grouping(v) => v.fmt(f),
-            Expr::Literal(v) => v.fmt(f),
-            Expr::Unary(v) => v.fmt(f),
-            Expr::Variable(v) => v.fmt(f),
-            Expr::Assign(v) => v.fmt(f),
+            Expr::Binary(v) => v.fmt(fmt),
+            Expr::Grouping(v) => v.fmt(fmt),
+            Expr::Literal(v) => v.fmt(fmt),
+            Expr::Unary(v) => v.fmt(fmt),
+            _ => Ok(()),
         }
     }
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct BinaryExpr {
-    pub left: Box<Expr>,
-    pub op: Token,
-    pub right: Box<Expr>,
+    pub left: Rc<Expr>,
+    pub op: Rc<Token>,
+    pub right: Rc<Expr>,
 }
 
 impl BinaryExpr {
-    pub fn new(left: Expr, op: Token, right: Expr) -> BinaryExpr {
-        BinaryExpr {
-            left: Box::new(left),
-            op,
-            right: Box::new(right),
-        }
+    pub fn new(left: Rc<Expr>, op: Rc<Token>, right: Rc<Expr>) -> BinaryExpr {
+        BinaryExpr { left, op, right }
     }
 }
 
 impl fmt::Display for BinaryExpr {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "({} {} {})", self.op.lexeme, self.left, self.right)
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(fmt, "({} {} {})", self.op.lexeme, self.left, self.right)
     }
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct GroupingExpr {
-    pub expression: Box<Expr>,
+    pub expression: Rc<Expr>,
 }
 
 impl GroupingExpr {
-    pub fn new(expression: Expr) -> GroupingExpr {
-        GroupingExpr {
-            expression: Box::new(expression),
-        }
+    pub fn new(expression: Rc<Expr>) -> GroupingExpr {
+        GroupingExpr { expression }
     }
 }
 
 impl fmt::Display for GroupingExpr {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "({})", self.expression)
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(fmt, "({})", self.expression)
     }
 }
 
@@ -78,66 +73,78 @@ impl LiteralExpr {
 }
 
 impl fmt::Display for LiteralExpr {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.value)
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(fmt, "{}", self.value)
     }
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct UnaryExpr {
-    pub op: Token,
-    pub right: Box<Expr>,
+    pub op: Rc<Token>,
+    pub right: Rc<Expr>,
 }
 
 impl UnaryExpr {
-    pub fn new(op: Token, right: Expr) -> UnaryExpr {
-        UnaryExpr {
-            op,
-            right: Box::new(right),
-        }
+    pub fn new(op: Rc<Token>, right: Rc<Expr>) -> UnaryExpr {
+        UnaryExpr { op, right }
     }
 }
 
 impl fmt::Display for UnaryExpr {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "({} {})", self.op.lexeme, self.right)
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(fmt, "({} {})", self.op.lexeme, self.right)
     }
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct VariableExpr {
-    pub name: Token,
+    pub name: Rc<Token>,
 }
 
 impl VariableExpr {
-    pub fn new(name: Token) -> VariableExpr {
+    pub fn new(name: Rc<Token>) -> VariableExpr {
         VariableExpr { name }
-    }
-}
-
-impl fmt::Display for VariableExpr {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.name.lexeme)
     }
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct AssignExpr {
-    pub name: Token,
-    pub value: Box<Expr>,
+    pub name: Rc<Token>,
+    pub value: Rc<Expr>,
 }
 
 impl AssignExpr {
-    pub fn new(name: Token, value: Expr) -> AssignExpr {
-        AssignExpr {
-            name,
-            value: Box::new(value),
-        }
+    pub fn new(name: Rc<Token>, value: Rc<Expr>) -> AssignExpr {
+        AssignExpr { name, value }
     }
 }
 
-impl fmt::Display for AssignExpr {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} = {}", self.name.lexeme, self.value)
+#[derive(Debug, PartialEq, Clone)]
+pub struct LogicalExpr {
+    pub left: Rc<Expr>,
+    pub op: Rc<Token>,
+    pub right: Rc<Expr>,
+}
+
+impl LogicalExpr {
+    pub fn new(left: Rc<Expr>, op: Rc<Token>, right: Rc<Expr>) -> LogicalExpr {
+        LogicalExpr { left, op, right }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct CallExpr {
+    pub callee: Rc<Expr>,
+    pub paren: Rc<Token>,
+    pub arguments: Vec<Rc<Expr>>,
+}
+
+impl CallExpr {
+    pub fn new(callee: Rc<Expr>, paren: Rc<Token>, arguments: Vec<Rc<Expr>>) -> CallExpr {
+        CallExpr {
+            callee,
+            paren,
+            arguments,
+        }
     }
 }

@@ -1,5 +1,5 @@
 use crate::{expr::Expr, token::Token};
-use std::fmt;
+use std::rc::Rc;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Stmt {
@@ -7,101 +7,84 @@ pub enum Stmt {
     Print(PrintStmt),
     Var(VarStmt),
     Block(BlockStmt),
-}
-
-impl fmt::Display for Stmt {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Stmt::Expression(v) => v.fmt(f),
-            Stmt::Print(v) => v.fmt(f),
-            Stmt::Var(v) => v.fmt(f),
-            Stmt::Block(v) => v.fmt(f),
-        }
-    }
+    If(IfStmt),
+    While(WhileStmt),
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct ExpressionStmt {
-    pub expression: Expr,
+    pub expression: Rc<Expr>,
 }
 
 impl ExpressionStmt {
-    pub fn new(expression: Expr) -> ExpressionStmt {
+    pub fn new(expression: Rc<Expr>) -> ExpressionStmt {
         ExpressionStmt { expression }
-    }
-}
-
-impl fmt::Display for ExpressionStmt {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{};", self.expression)
     }
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct PrintStmt {
-    pub expression: Expr,
+    pub expression: Rc<Expr>,
 }
 
 impl PrintStmt {
-    pub fn new(expression: Expr) -> PrintStmt {
+    pub fn new(expression: Rc<Expr>) -> PrintStmt {
         PrintStmt { expression }
-    }
-}
-
-impl fmt::Display for PrintStmt {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "print {};", self.expression)
     }
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct VarStmt {
-    pub name: Token,
-    pub initializer: Option<Expr>,
+    pub name: Rc<Token>,
+    pub initializer: Option<Rc<Expr>>,
 }
 
 impl VarStmt {
-    pub fn new(name: Token, initializer: Option<Expr>) -> VarStmt {
+    pub fn new(name: Rc<Token>, initializer: Option<Rc<Expr>>) -> VarStmt {
         VarStmt { name, initializer }
-    }
-}
-
-impl fmt::Display for VarStmt {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut s = format!("var {}", self.name.lexeme);
-        if let Some(ref initializer) = self.initializer {
-            s += &format!(" = {};", initializer);
-        } else {
-            s += ";";
-        }
-        write!(f, "{}", s)
     }
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct BlockStmt {
-    pub statements: Vec<Stmt>,
+    pub statements: Vec<Rc<Stmt>>,
 }
 
 impl BlockStmt {
-    pub fn new(statements: Vec<Stmt>) -> BlockStmt {
+    pub fn new(statements: Vec<Rc<Stmt>>) -> BlockStmt {
         BlockStmt { statements }
     }
 }
 
-impl fmt::Display for BlockStmt {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut s = String::new();
-        s += "{";
-        let len = self.statements.len();
-        for idx in 0..len {
-            let statement = self.statements.get(idx).unwrap();
-            s += &statement.to_string();
-            if idx < len - 1 {
-                s += ";";
-            }
+#[derive(Debug, PartialEq, Clone)]
+pub struct IfStmt {
+    pub condition: Rc<Expr>,
+    pub then_branch: Rc<Stmt>,
+    pub else_branch: Option<Rc<Stmt>>,
+}
+
+impl IfStmt {
+    pub fn new(
+        condition: Rc<Expr>,
+        then_branch: Rc<Stmt>,
+        else_branch: Option<Rc<Stmt>>,
+    ) -> IfStmt {
+        IfStmt {
+            condition,
+            then_branch,
+            else_branch,
         }
-        s += "}";
-        write!(f, "{}", s)
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct WhileStmt {
+    pub condition: Rc<Expr>,
+    pub body: Rc<Stmt>,
+}
+
+impl WhileStmt {
+    pub fn new(condition: Rc<Expr>, body: Rc<Stmt>) -> WhileStmt {
+        WhileStmt { condition, body }
     }
 }
