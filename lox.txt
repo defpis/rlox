@@ -1,7 +1,11 @@
 program               → declaration* EOF ;
-declaration           → varDecl | statement ;
+declaration           → funDecl | varDecl | statement ;
+funDecl               → "fun" function ;
+function              → IDENTIFIER "(" parameters? ")" block ;
+parameters            → IDENTIFIER ( "," IDENTIFIER )* ;
 varDecl               → "var" IDENTIFIER ( "=" expression )? ";" ;
-statement             → exprStmt | ifStmt | printStmt | whileStmt | forStmt | block ;
+statement             → exprStmt | forStmt | ifStmt | printStmt | returnStmt | whileStmt | block ;
+returnStmt            → "return" expression? ";" ;
 whileStmt             → "while" "(" expression ")" statement ;
 forStmt               → "for" "(" ( varDecl | exprStmt | ";" ) expression? ";" expression? ")" statement ;
 ifStmt                → "if" "(" expression ")" statement ( "else" statement )? ;

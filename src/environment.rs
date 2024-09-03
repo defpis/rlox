@@ -1,18 +1,33 @@
 use crate::{interpreter::InterpreterError, object::Object, token::Token};
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{
+    cell::RefCell,
+    collections::HashMap,
+    rc::{Rc, Weak},
+};
 
+#[derive(Debug)]
 pub struct Environment {
+    this: Weak<RefCell<Environment>>,
     enclosing: Option<Rc<RefCell<Environment>>>,
     values: HashMap<String, Object>,
 }
 
 impl Environment {
-    pub fn new(enclosing: Option<Rc<RefCell<Environment>>>) -> Environment {
-        Environment {
+    pub fn new(enclosing: Option<Rc<RefCell<Environment>>>) -> Rc<RefCell<Environment>> {
+        let instance = Rc::new(RefCell::new(Environment {
+            this: Weak::new(),
             enclosing,
             values: HashMap::new(),
-        }
+        }));
+
+        instance.borrow_mut().this = Rc::downgrade(&instance);
+
+        instance
     }
+
+    // fn shared_from_this(&self) -> Rc<RefCell<Environment>> {
+    //     self.this.upgrade().unwrap()
+    // }
 
     pub fn define(&mut self, key: String, value: Object) {
         self.values.insert(key, value);

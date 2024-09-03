@@ -1,17 +1,19 @@
-use std::rc::Rc;
-
 use crate::{
     expr::{
         AssignExpr, BinaryExpr, CallExpr, Expr, GroupingExpr, LiteralExpr, LogicalExpr, UnaryExpr,
         VariableExpr,
     },
     object::Object,
-    stmt::{BlockStmt, ExpressionStmt, IfStmt, PrintStmt, Stmt, VarStmt, WhileStmt},
+    stmt::{
+        BlockStmt, ExpressionStmt, FunctionStmt, IfStmt, PrintStmt, ReturnStmt, Stmt, VarStmt,
+        WhileStmt,
+    },
     token::{Token, TokenType},
 };
+use std::rc::Rc;
 
-pub fn parse(tokens: Vec<Rc<Token>>) -> Vec<Rc<Stmt>> {
-    let mut parser = Parser::new(tokens);
+pub fn parse(tokens: &Vec<Rc<Token>>) -> Vec<Rc<Stmt>> {
+    let mut parser = Parser::new(tokens.clone());
     let mut statements: Vec<Rc<Stmt>> = Vec::new();
     while !parser.is_at_end() {
         match parser.declaration() {
@@ -30,6 +32,8 @@ struct Parser {
     tokens: Vec<Rc<Token>>,
     current: usize,
 }
+
+static PARAM_MAX_COUNT: usize = 255;
 
 impl Parser {
     fn new(tokens: Vec<Rc<Token>>) -> Parser {
@@ -88,7 +92,54 @@ impl Parser {
         if self.find(&[TokenType::Var]) {
             return self.var_declaration();
         }
+        if self.find(&[TokenType::Fun]) {
+            return self.function("function");
+        }
         self.statement()
+    }
+
+    fn function(&mut self, kind: &str) -> Result<Rc<Stmt>, ParserError> {
+        let name = self.consume(
+            &TokenType::Identifier,
+            format!("Expect {} name.", kind).as_str(),
+        )?;
+
+        self.consume(
+            &TokenType::LeftParen,
+            format!("Expect '(' after {} name.", kind).as_str(),
+        )?;
+
+        let mut parameters: Vec<Rc<Token>> = Vec::new();
+        if !self.check(&TokenType::RightParen) {
+            loop {
+                if parameters.len() > PARAM_MAX_COUNT {
+                    let token = self.previous();
+                    return Err(ParserError {
+                        msg: format!(
+                            "[line {}] <{:?}> : Can't have more than 255 arguments.",
+                            token.line, token
+                        ),
+                    });
+                }
+                parameters.push(self.consume(&TokenType::Identifier, "Expect parameter name.")?);
+                if !self.find(&[TokenType::Comma]) {
+                    break;
+                }
+            }
+        }
+
+        self.consume(&TokenType::RightParen, "Expect ')' after parameters.")?;
+
+        self.consume(
+            &TokenType::LeftBrace,
+            format!("Expect '{{' before {} body.", kind).as_str(),
+        )?;
+
+        let body = self.block()?;
+
+        Ok(Rc::new(Stmt::Function(FunctionStmt::new(
+            name, parameters, body,
+        ))))
     }
 
     fn var_declaration(&mut self) -> Result<Rc<Stmt>, ParserError> {
@@ -108,6 +159,9 @@ impl Parser {
     }
 
     fn statement(&mut self) -> Result<Rc<Stmt>, ParserError> {
+        if self.find(&[TokenType::Return]) {
+            return self.return_statement();
+        }
         if self.find(&[TokenType::For]) {
             return self.for_statement();
         }
@@ -194,6 +248,16 @@ impl Parser {
         self.consume(&TokenType::RightParen, "Expect ')' after while condition.")?;
         let body = self.statement()?;
         Ok(Rc::new(Stmt::While(WhileStmt::new(condition, body))))
+    }
+
+    fn return_statement(&mut self) -> Result<Rc<Stmt>, ParserError> {
+        let keyword = self.previous();
+        let mut value: Option<Rc<Expr>> = None;
+        if !self.check(&TokenType::Semicolon) {
+            value = Some(self.expression()?);
+        }
+        self.consume(&TokenType::Semicolon, "Expect ';' after return value.")?;
+        Ok(Rc::new(Stmt::Return(ReturnStmt::new(keyword, value))))
     }
 
     fn if_statement(&mut self) -> Result<Rc<Stmt>, ParserError> {
@@ -358,7 +422,7 @@ impl Parser {
 
         if !self.check(&TokenType::RightParen) {
             loop {
-                if arguments.len() >= 255 {
+                if arguments.len() >= PARAM_MAX_COUNT {
                     let token = self.previous();
                     return Err(ParserError {
                         msg: format!(

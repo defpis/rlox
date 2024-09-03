@@ -9,6 +9,8 @@ pub enum Stmt {
     Block(BlockStmt),
     If(IfStmt),
     While(WhileStmt),
+    Function(FunctionStmt),
+    Return(ReturnStmt),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -86,5 +88,30 @@ pub struct WhileStmt {
 impl WhileStmt {
     pub fn new(condition: Rc<Expr>, body: Rc<Stmt>) -> WhileStmt {
         WhileStmt { condition, body }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct FunctionStmt {
+    pub name: Rc<Token>,
+    pub params: Vec<Rc<Token>>,
+    pub body: Vec<Rc<Stmt>>,
+}
+
+impl FunctionStmt {
+    pub fn new(name: Rc<Token>, params: Vec<Rc<Token>>, body: Vec<Rc<Stmt>>) -> FunctionStmt {
+        FunctionStmt { name, params, body }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct ReturnStmt {
+    pub keyword: Rc<Token>,
+    pub value: Option<Rc<Expr>>,
+}
+
+impl ReturnStmt {
+    pub fn new(keyword: Rc<Token>, value: Option<Rc<Expr>>) -> ReturnStmt {
+        ReturnStmt { keyword, value }
     }
 }

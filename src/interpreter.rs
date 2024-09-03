@@ -1,17 +1,13 @@
 use crate::{
-    callable::Clock, environment::Environment, expr::Expr, object::Object, stmt::Stmt,
-    token::TokenType,
+    callable::Clock, environment::Environment, expr::Expr, function::Function, object::Object,
+    stmt::Stmt, token::TokenType,
 };
-use std::{
-    cell::RefCell,
-    panic,
-    rc::{Rc, Weak},
-};
+use std::{cell::RefCell, rc::Rc};
 
-pub fn interpret(statements: Vec<Rc<Stmt>>) {
-    let interpreter = Interpreter::new();
+pub fn interpret(statements: &Vec<Rc<Stmt>>) {
+    let mut interpreter = Interpreter::new();
     for statement in statements {
-        match interpreter.borrow_mut().execute(&statement) {
+        match interpreter.execute(&statement) {
             Ok(_) => (),
             Err(err) => panic!("{}", err.msg),
         }
@@ -20,7 +16,7 @@ pub fn interpret(statements: Vec<Rc<Stmt>>) {
 
 pub struct InterpreterError {
     pub msg: String,
-    pub returning: Option<Rc<Object>>,
+    pub returning: Option<Object>,
 }
 
 trait Visitor<T> {
@@ -29,14 +25,13 @@ trait Visitor<T> {
 }
 
 pub struct Interpreter {
-    this: Weak<RefCell<Interpreter>>,
-    globals: Rc<RefCell<Environment>>,
-    environment: Rc<RefCell<Environment>>,
+    pub globals: Rc<RefCell<Environment>>,
+    pub environment: Rc<RefCell<Environment>>,
 }
 
 impl Interpreter {
-    fn new() -> Rc<RefCell<Interpreter>> {
-        let globals = Rc::new(RefCell::new(Environment::new(None)));
+    fn new() -> Interpreter {
+        let globals = Environment::new(None);
 
         globals.borrow_mut().define(
             String::from("clock"),
@@ -45,19 +40,10 @@ impl Interpreter {
 
         let environment = globals.clone();
 
-        let instance = Rc::new(RefCell::new(Interpreter {
-            this: Weak::new(),
+        Interpreter {
             globals,
             environment,
-        }));
-
-        instance.borrow_mut().this = Rc::downgrade(&instance);
-
-        instance
-    }
-
-    fn shared_from_this(&self) -> Rc<RefCell<Interpreter>> {
-        self.this.upgrade().unwrap()
+        }
     }
 
     fn evaluate(&mut self, expr: &Expr) -> Result<Object, InterpreterError> {
@@ -69,24 +55,30 @@ impl Interpreter {
         Ok(())
     }
 
-    fn execute_block(
+    pub fn execute_block(
         &mut self,
         statements: &Vec<Rc<Stmt>>,
         environment: Rc<RefCell<Environment>>,
-    ) -> Result<(), InterpreterError> {
+    ) -> Result<Object, InterpreterError> {
         let previous = self.environment.clone();
         self.environment = environment;
         for statement in statements {
             match self.execute(&statement) {
                 Ok(_) => (),
-                Err(err) => {
-                    self.environment = previous;
-                    return Err(err);
-                }
+                Err(err) => match err.returning {
+                    Some(returning) => {
+                        self.environment = previous;
+                        return Ok(returning);
+                    }
+                    None => {
+                        self.environment = previous;
+                        return Err(err);
+                    }
+                },
             }
         }
         self.environment = previous;
-        Ok(())
+        Ok(Object::Nil)
     }
 }
 
@@ -266,7 +258,7 @@ impl Visitor<Object> for Interpreter {
                                 returning: None,
                             });
                         }
-                        function.call(self.shared_from_this(), arguments)
+                        function.call(self, arguments)
                     }
                     _ => Err(InterpreterError {
                         msg: format!(
@@ -303,9 +295,7 @@ impl Visitor<Object> for Interpreter {
             Stmt::Block(stmt) => {
                 self.execute_block(
                     &stmt.statements,
-                    Rc::new(RefCell::new(Environment::new(Some(
-                        self.environment.clone(),
-                    )))),
+                    Environment::new(Some(self.environment.clone())),
                 )?;
                 Ok(())
             }
@@ -322,6 +312,24 @@ impl Visitor<Object> for Interpreter {
                     self.execute(&stmt.body)?
                 }
                 Ok(())
+            }
+            Stmt::Function(stmt) => {
+                let function = Function::new(stmt.clone(), self.environment.clone());
+                self.environment.borrow_mut().define(
+                    stmt.name.lexeme.clone(),
+                    Object::Callable(Rc::new(function)),
+                );
+                Ok(())
+            }
+            Stmt::Return(stmt) => {
+                let mut returning = Object::Nil;
+                if let Some(ref value) = stmt.value {
+                    returning = self.evaluate(value)?;
+                }
+                Err(InterpreterError {
+                    msg: String::from("returning"),
+                    returning: Some(returning),
+                })
             }
         }
     }

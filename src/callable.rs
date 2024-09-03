@@ -4,18 +4,14 @@ use crate::{
     interpreter::{Interpreter, InterpreterError},
     object::Object,
 };
-use std::{
-    cell::RefCell,
-    fmt::{self, Debug},
-    rc::Rc,
-};
+use std::fmt::{self, Debug};
 
 pub trait Callable: Debug + fmt::Display {
     fn arity(&self) -> usize;
 
     fn call(
         &self,
-        interpreter: Rc<RefCell<Interpreter>>,
+        interpreter: &mut Interpreter,
         arguments: Vec<Object>,
     ) -> Result<Object, InterpreterError>;
 }
@@ -34,11 +30,7 @@ impl Callable for Clock {
         0
     }
 
-    fn call(
-        &self,
-        _: Rc<RefCell<Interpreter>>,
-        _: Vec<Object>,
-    ) -> Result<Object, InterpreterError> {
+    fn call(&self, _: &mut Interpreter, _: Vec<Object>) -> Result<Object, InterpreterError> {
         Ok(Object::Number(Utc::now().timestamp() as f64))
     }
 }
