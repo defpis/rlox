@@ -1,4 +1,4 @@
-use crate::{expr::Expr, token::Token};
+use crate::{expr::HashExpr, token::Token};
 use std::rc::Rc;
 
 #[derive(Debug, PartialEq, Clone)]
@@ -15,22 +15,22 @@ pub enum Stmt {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct ExpressionStmt {
-    pub expression: Rc<Expr>,
+    pub expression: Rc<HashExpr>,
 }
 
 impl ExpressionStmt {
-    pub fn new(expression: Rc<Expr>) -> ExpressionStmt {
+    pub fn new(expression: Rc<HashExpr>) -> ExpressionStmt {
         ExpressionStmt { expression }
     }
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct PrintStmt {
-    pub expression: Rc<Expr>,
+    pub expression: Rc<HashExpr>,
 }
 
 impl PrintStmt {
-    pub fn new(expression: Rc<Expr>) -> PrintStmt {
+    pub fn new(expression: Rc<HashExpr>) -> PrintStmt {
         PrintStmt { expression }
     }
 }
@@ -38,11 +38,11 @@ impl PrintStmt {
 #[derive(Debug, PartialEq, Clone)]
 pub struct VarStmt {
     pub name: Rc<Token>,
-    pub initializer: Option<Rc<Expr>>,
+    pub initializer: Option<Rc<HashExpr>>,
 }
 
 impl VarStmt {
-    pub fn new(name: Rc<Token>, initializer: Option<Rc<Expr>>) -> VarStmt {
+    pub fn new(name: Rc<Token>, initializer: Option<Rc<HashExpr>>) -> VarStmt {
         VarStmt { name, initializer }
     }
 }
@@ -60,14 +60,14 @@ impl BlockStmt {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct IfStmt {
-    pub condition: Rc<Expr>,
+    pub condition: Rc<HashExpr>,
     pub then_branch: Rc<Stmt>,
     pub else_branch: Option<Rc<Stmt>>,
 }
 
 impl IfStmt {
     pub fn new(
-        condition: Rc<Expr>,
+        condition: Rc<HashExpr>,
         then_branch: Rc<Stmt>,
         else_branch: Option<Rc<Stmt>>,
     ) -> IfStmt {
@@ -81,12 +81,12 @@ impl IfStmt {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct WhileStmt {
-    pub condition: Rc<Expr>,
+    pub condition: Rc<HashExpr>,
     pub body: Rc<Stmt>,
 }
 
 impl WhileStmt {
-    pub fn new(condition: Rc<Expr>, body: Rc<Stmt>) -> WhileStmt {
+    pub fn new(condition: Rc<HashExpr>, body: Rc<Stmt>) -> WhileStmt {
         WhileStmt { condition, body }
     }
 }
@@ -107,11 +107,11 @@ impl FunctionStmt {
 #[derive(Debug, PartialEq, Clone)]
 pub struct ReturnStmt {
     pub keyword: Rc<Token>,
-    pub value: Option<Rc<Expr>>,
+    pub value: Option<Rc<HashExpr>>,
 }
 
 impl ReturnStmt {
-    pub fn new(keyword: Rc<Token>, value: Option<Rc<Expr>>) -> ReturnStmt {
+    pub fn new(keyword: Rc<Token>, value: Option<Rc<HashExpr>>) -> ReturnStmt {
         ReturnStmt { keyword, value }
     }
 }

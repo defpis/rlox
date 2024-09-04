@@ -16,7 +16,7 @@ pub fn run_file(path: &str) {
     let mut code = String::new();
     file.read_to_string(&mut code).unwrap();
 
-    run_code(&skip_out(&code));
+    run_code(skip_out(&code));
 }
 
 pub fn run_repl() {
@@ -31,15 +31,15 @@ pub fn run_repl() {
         io::stdin().read_line(&mut code).unwrap();
         let input = code.trim();
 
-        run_code(&input);
+        run_code(input);
     }
 }
 
 pub fn run_code(code: &str) {
-    let tokens = scan_tokens(&code);
+    let tokens = scan_tokens(code);
     // println!("{:?}", tokens);
 
-    let statements = parse(&tokens);
+    let statements = parse(tokens);
     // println!("{:?}", statements);
 
     interpret(&statements);

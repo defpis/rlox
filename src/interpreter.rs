@@ -1,56 +1,84 @@
 use crate::{
-    callable::Clock, environment::Environment, expr::Expr, function::Function, object::Object,
-    stmt::Stmt, token::TokenType,
+    callable::Clock,
+    environment::Environment,
+    expr::{Expr, HashExpr},
+    function::Function,
+    object::Object,
+    resolver::Resolver,
+    stmt::Stmt,
+    token::{Token, TokenType},
 };
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 pub fn interpret(statements: &Vec<Rc<Stmt>>) {
-    let mut interpreter = Interpreter::new();
+    let mut resolver = Resolver::new();
+    let locals = resolver.resolve(statements);
+
+    // println!("{:?}", locals);
+
+    let mut interpreter = Interpreter::new(locals);
+
     for statement in statements {
-        match interpreter.execute(&statement) {
+        match interpreter.execute(statement) {
             Ok(_) => (),
-            Err(err) => panic!("{}", err.msg),
+            Err(err) => match err {
+                InterpretError::Return(_) => panic!("Unreachable error!"),
+                InterpretError::Error(message) => panic!("{}", message),
+            },
         }
     }
 }
 
-pub struct InterpreterError {
-    pub msg: String,
-    pub returning: Option<Object>,
+pub enum InterpretError {
+    Error(String),
+    Return(Object),
 }
 
-trait Visitor<T> {
-    fn visit_expr(&mut self, expr: &Expr) -> Result<T, InterpreterError>;
-    fn visit_stmt(&mut self, stmt: &Stmt) -> Result<(), InterpreterError>;
+pub trait Visitor<T, U> {
+    fn visit_expr(&mut self, hash_expr: &HashExpr) -> Result<T, U>;
+    fn visit_stmt(&mut self, stmt: &Stmt) -> Result<(), U>;
 }
 
 pub struct Interpreter {
-    pub globals: Rc<RefCell<Environment>>,
-    pub environment: Rc<RefCell<Environment>>,
+    locals: Rc<RefCell<HashMap<HashExpr, usize>>>,
+    globals: Rc<RefCell<Environment>>,
+    environment: Rc<RefCell<Environment>>,
 }
 
 impl Interpreter {
-    fn new() -> Interpreter {
+    fn new(locals: Rc<RefCell<HashMap<HashExpr, usize>>>) -> Interpreter {
         let globals = Environment::new(None);
 
-        globals.borrow_mut().define(
-            String::from("clock"),
-            Object::Callable(Rc::new(Clock::new())),
-        );
+        globals
+            .borrow_mut()
+            .define(format!("clock"), Object::Callable(Rc::new(Clock::new())));
 
         let environment = globals.clone();
 
         Interpreter {
+            locals,
             globals,
             environment,
         }
     }
 
-    fn evaluate(&mut self, expr: &Expr) -> Result<Object, InterpreterError> {
-        self.visit_expr(expr)
+    fn lookup_variable(
+        &self,
+        name: &Token,
+        hash_expr: &HashExpr,
+    ) -> Result<Object, InterpretError> {
+        if let Some(distance) = self.locals.borrow().get(hash_expr).cloned() {
+            self.environment.borrow().get_at(distance, name)
+        } else {
+            self.globals.borrow().get(name)
+        }
     }
 
-    fn execute(&mut self, stmt: &Stmt) -> Result<(), InterpreterError> {
+    fn evaluate(&mut self, hash_expr: &HashExpr) -> Result<Object, InterpretError> {
+        self.visit_expr(hash_expr)
+    }
+
+    fn execute(&mut self, stmt: &Stmt) -> Result<(), InterpretError> {
         self.visit_stmt(stmt)?;
         Ok(())
     }
@@ -59,20 +87,20 @@ impl Interpreter {
         &mut self,
         statements: &Vec<Rc<Stmt>>,
         environment: Rc<RefCell<Environment>>,
-    ) -> Result<Object, InterpreterError> {
+    ) -> Result<Object, InterpretError> {
         let previous = self.environment.clone();
         self.environment = environment;
         for statement in statements {
             match self.execute(&statement) {
                 Ok(_) => (),
-                Err(err) => match err.returning {
-                    Some(returning) => {
+                Err(err) => match err {
+                    InterpretError::Return(value) => {
                         self.environment = previous;
-                        return Ok(returning);
+                        return Ok(value);
                     }
-                    None => {
+                    InterpretError::Error(message) => {
                         self.environment = previous;
-                        return Err(err);
+                        return Err(InterpretError::Error(message));
                     }
                 },
             }
@@ -82,9 +110,9 @@ impl Interpreter {
     }
 }
 
-impl Visitor<Object> for Interpreter {
-    fn visit_expr(&mut self, expr: &Expr) -> Result<Object, InterpreterError> {
-        match expr {
+impl Visitor<Object, InterpretError> for Interpreter {
+    fn visit_expr(&mut self, hash_expr: &HashExpr) -> Result<Object, InterpretError> {
+        match &hash_expr.expr {
             Expr::Literal(expr) => Ok(expr.value.clone()),
             Expr::Grouping(expr) => self.evaluate(&expr.expression),
             Expr::Unary(expr) => {
@@ -93,13 +121,10 @@ impl Visitor<Object> for Interpreter {
                 match expr.op.token_type {
                     TokenType::Minus => match right {
                         Object::Number(n) => Ok(Object::Number(-n)),
-                        _ => Err(InterpreterError {
-                            msg: format!(
-                                "[line {}] <{:?}> : Operator must be a number.",
-                                expr.op.line, expr.op
-                            ),
-                            returning: None,
-                        }),
+                        _ => Err(InterpretError::Error(format!(
+                            "[line {}] <{:?}> : Operator must be a number.",
+                            expr.op.line, expr.op
+                        ))),
                     },
                     TokenType::Bang => Ok(Object::Boolean(!right.is_truthy())),
                     _ => panic!("Unreachable error!"),
@@ -112,108 +137,85 @@ impl Visitor<Object> for Interpreter {
                 match expr.op.token_type {
                     TokenType::Minus => match (left, right) {
                         (Object::Number(l), Object::Number(r)) => Ok(Object::Number(l - r)),
-                        _ => Err(InterpreterError {
-                            msg: format!(
-                                "[line {}] <{:?}> : Operators must be two numbers.",
-                                expr.op.line, expr.op
-                            ),
-                            returning: None,
-                        }),
+                        _ => Err(InterpretError::Error(format!(
+                            "[line {}] <{:?}> : Operators must be two numbers.",
+                            expr.op.line, expr.op
+                        ))),
                     },
                     TokenType::Plus => match (left, right) {
                         (Object::Number(l), Object::Number(r)) => Ok(Object::Number(l + r)),
                         (Object::String(l), Object::String(r)) => {
                             Ok(Object::String(format!("{}{}", l, r)))
                         }
-                        _ => Err(InterpreterError {
-                            msg: format!(
-                                "[line {}] <{:?}> : Operators must be two numbers or strings.",
-                                expr.op.line, expr.op
-                            ),
-                            returning: None,
-                        }),
+                        _ => Err(InterpretError::Error(format!(
+                            "[line {}] <{:?}> : Operators must be two numbers or strings.",
+                            expr.op.line, expr.op
+                        ))),
                     },
                     TokenType::Slash => match (left, right) {
                         (Object::Number(l), Object::Number(r)) => match r {
-                            0.0 => Err(InterpreterError {
-                                msg: format!(
-                                    "[line {}] <{:?}> : Division by zero.",
-                                    expr.op.line, expr.op
-                                ),
-                                returning: None,
-                            }),
+                            0.0 => Err(InterpretError::Error(format!(
+                                "[line {}] <{:?}> : Division by zero.",
+                                expr.op.line, expr.op
+                            ))),
                             _ => Ok(Object::Number(l / r)),
                         },
-                        _ => Err(InterpreterError {
-                            msg: format!(
-                                "[line {}] <{:?}> : Operators must be two numbers.",
-                                expr.op.line, expr.op
-                            ),
-                            returning: None,
-                        }),
+                        _ => Err(InterpretError::Error(format!(
+                            "[line {}] <{:?}> : Operators must be two numbers.",
+                            expr.op.line, expr.op
+                        ))),
                     },
                     TokenType::Star => match (left, right) {
                         (Object::Number(l), Object::Number(r)) => Ok(Object::Number(l * r)),
-                        _ => Err(InterpreterError {
-                            msg: format!(
-                                "[line {}] <{:?}> : Operators must be two numbers.",
-                                expr.op.line, expr.op
-                            ),
-                            returning: None,
-                        }),
+                        _ => Err(InterpretError::Error(format!(
+                            "[line {}] <{:?}> : Operators must be two numbers.",
+                            expr.op.line, expr.op
+                        ))),
                     },
                     TokenType::Greater => match (left, right) {
                         (Object::Number(l), Object::Number(r)) => Ok(Object::Boolean(l > r)),
-                        _ => Err(InterpreterError {
-                            msg: format!(
-                                "[line {}] <{:?}> : Operators must be two numbers.",
-                                expr.op.line, expr.op
-                            ),
-                            returning: None,
-                        }),
+                        _ => Err(InterpretError::Error(format!(
+                            "[line {}] <{:?}> : Operators must be two numbers.",
+                            expr.op.line, expr.op
+                        ))),
                     },
                     TokenType::GreaterEqual => match (left, right) {
                         (Object::Number(l), Object::Number(r)) => Ok(Object::Boolean(l >= r)),
-                        _ => Err(InterpreterError {
-                            msg: format!(
-                                "[line {}] <{:?}> : Operators must be two numbers.",
-                                expr.op.line, expr.op
-                            ),
-                            returning: None,
-                        }),
+                        _ => Err(InterpretError::Error(format!(
+                            "[line {}] <{:?}> : Operators must be two numbers.",
+                            expr.op.line, expr.op
+                        ))),
                     },
                     TokenType::Less => match (left, right) {
                         (Object::Number(l), Object::Number(r)) => Ok(Object::Boolean(l < r)),
-                        _ => Err(InterpreterError {
-                            msg: format!(
-                                "[line {}] <{:?}> : Operators must be two numbers.",
-                                expr.op.line, expr.op
-                            ),
-                            returning: None,
-                        }),
+                        _ => Err(InterpretError::Error(format!(
+                            "[line {}] <{:?}> : Operators must be two numbers.",
+                            expr.op.line, expr.op
+                        ))),
                     },
                     TokenType::LessEqual => match (left, right) {
                         (Object::Number(l), Object::Number(r)) => Ok(Object::Boolean(l <= r)),
-                        _ => Err(InterpreterError {
-                            msg: format!(
-                                "[line {}] <{:?}> : Operators must be two numbers.",
-                                expr.op.line, expr.op
-                            ),
-                            returning: None,
-                        }),
+                        _ => Err(InterpretError::Error(format!(
+                            "[line {}] <{:?}> : Operators must be two numbers.",
+                            expr.op.line, expr.op
+                        ))),
                     },
                     TokenType::BangEqual => Ok(Object::Boolean(left != right)),
                     TokenType::EqualEqual => Ok(Object::Boolean(left == right)),
                     _ => panic!("Unreachable error!"),
                 }
             }
-            Expr::Variable(expr) => Ok(self.environment.borrow().get(expr.name.clone())?),
+            Expr::Variable(expr) => Ok(self.lookup_variable(&expr.name, hash_expr))?,
             Expr::Assign(expr) => {
                 let value = self.evaluate(&expr.value)?;
-                self.environment
-                    .borrow_mut()
-                    .assign(expr.name.clone(), value.clone())?;
-                Ok(value)
+                if let Some(distance) = self.locals.borrow().get(hash_expr).cloned() {
+                    self.environment
+                        .borrow_mut()
+                        .assign_at(distance, &expr.name, value)?
+                } else {
+                    self.globals.borrow_mut().assign(&expr.name, value)?
+                }
+                Ok(Object::Nil)
             }
             Expr::Logical(expr) => {
                 let left = self.evaluate(&expr.left)?;
@@ -247,31 +249,25 @@ impl Visitor<Object> for Interpreter {
                 match callee {
                     Object::Callable(function) => {
                         if arguments.len() != function.arity() {
-                            return Err(InterpreterError {
-                                msg: format!(
-                                    "[line {}] <{:?}> : Expected {} arguments but got {}.",
-                                    expr.paren.line,
-                                    expr.paren,
-                                    function.arity(),
-                                    arguments.len()
-                                ),
-                                returning: None,
-                            });
+                            return Err(InterpretError::Error(format!(
+                                "[line {}] <{:?}> : Expected {} arguments but got {}.",
+                                expr.paren.line,
+                                expr.paren,
+                                function.arity(),
+                                arguments.len()
+                            )));
                         }
                         function.call(self, arguments)
                     }
-                    _ => Err(InterpreterError {
-                        msg: format!(
-                            "[line {}] <{:?}> : Can only call functions and classes.",
-                            expr.paren.line, expr.paren
-                        ),
-                        returning: None,
-                    }),
+                    _ => Err(InterpretError::Error(format!(
+                        "[line {}] <{:?}> : Can only call functions and classes.",
+                        expr.paren.line, expr.paren
+                    ))),
                 }
             }
         }
     }
-    fn visit_stmt(&mut self, stmt: &Stmt) -> Result<(), InterpreterError> {
+    fn visit_stmt(&mut self, stmt: &Stmt) -> Result<(), InterpretError> {
         match stmt {
             Stmt::Expression(stmt) => {
                 self.evaluate(&stmt.expression)?;
@@ -322,14 +318,11 @@ impl Visitor<Object> for Interpreter {
                 Ok(())
             }
             Stmt::Return(stmt) => {
-                let mut returning = Object::Nil;
-                if let Some(ref value) = stmt.value {
-                    returning = self.evaluate(value)?;
+                let mut value = Object::Nil;
+                if let Some(ref expr) = stmt.value {
+                    value = self.evaluate(expr)?;
                 }
-                Err(InterpreterError {
-                    msg: String::from("returning"),
-                    returning: Some(returning),
-                })
+                Err(InterpretError::Return(value))
             }
         }
     }

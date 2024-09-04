@@ -1,9 +1,8 @@
-use chrono::Utc;
-
 use crate::{
-    interpreter::{Interpreter, InterpreterError},
+    interpreter::{InterpretError, Interpreter},
     object::Object,
 };
+use chrono::Utc;
 use std::fmt::{self, Debug};
 
 pub trait Callable: Debug + fmt::Display {
@@ -13,7 +12,7 @@ pub trait Callable: Debug + fmt::Display {
         &self,
         interpreter: &mut Interpreter,
         arguments: Vec<Object>,
-    ) -> Result<Object, InterpreterError>;
+    ) -> Result<Object, InterpretError>;
 }
 
 #[derive(Debug)]
@@ -30,13 +29,13 @@ impl Callable for Clock {
         0
     }
 
-    fn call(&self, _: &mut Interpreter, _: Vec<Object>) -> Result<Object, InterpreterError> {
+    fn call(&self, _: &mut Interpreter, _: Vec<Object>) -> Result<Object, InterpretError> {
         Ok(Object::Number(Utc::now().timestamp() as f64))
     }
 }
 
 impl fmt::Display for Clock {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(fmt, "<native clock>")
+        write!(fmt, "<builtin-fun clock>")
     }
 }

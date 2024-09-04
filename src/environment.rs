@@ -1,4 +1,4 @@
-use crate::{interpreter::InterpreterError, object::Object, token::Token};
+use crate::{interpreter::InterpretError, object::Object, token::Token};
 use std::{
     cell::RefCell,
     collections::HashMap,
@@ -33,25 +33,34 @@ impl Environment {
         self.values.insert(key, value);
     }
 
-    pub fn get(&self, name: Rc<Token>) -> Result<Object, InterpreterError> {
-        if let Some(value) = self.values.get(&name.lexeme) {
-            return Ok(value.clone());
+    pub fn get(&self, name: &Token) -> Result<Object, InterpretError> {
+        if let Some(value) = self.values.get(&name.lexeme).cloned() {
+            return Ok(value);
         }
 
         if let Some(parent) = self.enclosing.as_ref() {
             return parent.borrow().get(name);
         }
 
-        Err(InterpreterError {
-            msg: format!(
-                "[line {}] <{:?}> : Undefined variable `{}`.",
-                name.line, name, name.lexeme,
-            ),
-            returning: None,
-        })
+        Err(InterpretError::Error(format!(
+            "[line {}] <{:?}> : Undefined variable `{}`.",
+            name.line, name, name.lexeme,
+        )))
     }
 
-    pub fn assign(&mut self, name: Rc<Token>, value: Object) -> Result<(), InterpreterError> {
+    pub fn get_at(&self, distance: usize, name: &Token) -> Result<Object, InterpretError> {
+        if distance > 0 {
+            if let Some(ref enclosing) = self.enclosing {
+                enclosing.borrow().get_at(distance - 1, name)
+            } else {
+                panic!("Unreachable error!")
+            }
+        } else {
+            self.get(name)
+        }
+    }
+
+    pub fn assign(&mut self, name: &Token, value: Object) -> Result<(), InterpretError> {
         if self.values.contains_key(&name.lexeme) {
             self.values.insert(name.lexeme.clone(), value);
             return Ok(());
@@ -62,12 +71,26 @@ impl Environment {
             return Ok(());
         }
 
-        Err(InterpreterError {
-            msg: format!(
-                "[line {}] <{:?}> : Undefined variable `{}`.",
-                name.line, name, name.lexeme,
-            ),
-            returning: None,
-        })
+        Err(InterpretError::Error(format!(
+            "[line {}] <{:?}> : Undefined variable `{}`.",
+            name.line, name, name.lexeme,
+        )))
+    }
+
+    pub fn assign_at(
+        &mut self,
+        distance: usize,
+        name: &Token,
+        value: Object,
+    ) -> Result<(), InterpretError> {
+        if distance > 0 {
+            if let Some(ref enclosing) = self.enclosing {
+                enclosing.borrow_mut().assign_at(distance - 1, name, value)
+            } else {
+                panic!("Unreachable error!")
+            }
+        } else {
+            self.assign(name, value)
+        }
     }
 }

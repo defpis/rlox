@@ -16,7 +16,7 @@ pub fn scan_tokens(code: &str) -> Vec<Rc<Token>> {
                 Some(token) => tokens.push(Rc::new(token)),
                 None => (), // Skip
             },
-            Err(err) => panic!("{}", err.msg),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -25,9 +25,7 @@ pub fn scan_tokens(code: &str) -> Vec<Rc<Token>> {
     tokens
 }
 
-struct ScannerError {
-    msg: String,
-}
+type ScanError = String;
 
 struct Scanner {
     chars: Vec<char>,
@@ -36,30 +34,30 @@ struct Scanner {
     line: usize,
 }
 
-static KEYWORDS: LazyLock<HashMap<&str, TokenType>> = LazyLock::new(|| {
-    let mut m = HashMap::new();
-
-    m.insert("and", TokenType::And);
-    m.insert("class", TokenType::Class);
-    m.insert("else", TokenType::Else);
-    m.insert("false", TokenType::False);
-    m.insert("for", TokenType::For);
-    m.insert("fun", TokenType::Fun);
-    m.insert("if", TokenType::If);
-    m.insert("nil", TokenType::Nil);
-    m.insert("or", TokenType::Or);
-    m.insert("print", TokenType::Print);
-    m.insert("return", TokenType::Return);
-    m.insert("super", TokenType::Super);
-    m.insert("this", TokenType::This);
-    m.insert("true", TokenType::True);
-    m.insert("var", TokenType::Var);
-    m.insert("while", TokenType::While);
-
-    m
-});
-
 impl Scanner {
+    const KEYWORDS: LazyLock<HashMap<&str, TokenType>> = LazyLock::new(|| {
+        let mut m = HashMap::new();
+
+        m.insert("and", TokenType::And);
+        m.insert("class", TokenType::Class);
+        m.insert("else", TokenType::Else);
+        m.insert("false", TokenType::False);
+        m.insert("for", TokenType::For);
+        m.insert("fun", TokenType::Fun);
+        m.insert("if", TokenType::If);
+        m.insert("nil", TokenType::Nil);
+        m.insert("or", TokenType::Or);
+        m.insert("print", TokenType::Print);
+        m.insert("return", TokenType::Return);
+        m.insert("super", TokenType::Super);
+        m.insert("this", TokenType::This);
+        m.insert("true", TokenType::True);
+        m.insert("var", TokenType::Var);
+        m.insert("while", TokenType::While);
+
+        m
+    });
+
     fn is_digit(char: char) -> bool {
         char >= '0' && char <= '9'
     }
@@ -82,7 +80,7 @@ impl Scanner {
     }
 
     fn eof(&self) -> Token {
-        Token::new(TokenType::Eof, String::from(""), Object::Nil, self.line)
+        Token::new(TokenType::Eof, format!(""), Object::Nil, self.line)
     }
 
     fn is_at_end(&self) -> bool {
@@ -117,7 +115,7 @@ impl Scanner {
         self.peek_at(self.current - 1).unwrap()
     }
 
-    fn token(&mut self, token_type: TokenType) -> Result<Option<Token>, ScannerError> {
+    fn token(&mut self, token_type: TokenType) -> Result<Option<Token>, ScanError> {
         let slice = &self.chars[self.start..self.current];
         let lexeme = String::from_iter(slice);
 
@@ -132,7 +130,7 @@ impl Scanner {
         Ok(Some(Token::new(token_type, lexeme, literal, self.line)))
     }
 
-    fn string(&mut self) -> Result<Option<Token>, ScannerError> {
+    fn string(&mut self) -> Result<Option<Token>, ScanError> {
         while let Some(char) = self.peek() {
             match char {
                 '"' => {
@@ -149,12 +147,10 @@ impl Scanner {
             }
         }
 
-        Err(ScannerError {
-            msg: format!("[line {}] : Unterminated string.", self.line),
-        })
+        Err(format!("[line {}] : Unterminated string.", self.line))
     }
 
-    fn number(&mut self) -> Result<Option<Token>, ScannerError> {
+    fn number(&mut self) -> Result<Option<Token>, ScanError> {
         while self.peek().map_or(false, Scanner::is_digit) {
             self.advance();
         }
@@ -173,16 +169,14 @@ impl Scanner {
         if let Some(char) = self.peek() {
             // `123abc` or `123.`
             if Scanner::is_alpha(char) || char == '.' {
-                return Err(ScannerError {
-                    msg: format!("[line {}] : Invalid number.", self.line),
-                });
+                return Err(format!("[line {}] : Invalid number.", self.line));
             }
         }
 
         self.token(TokenType::Number)
     }
 
-    fn identifier(&mut self) -> Result<Option<Token>, ScannerError> {
+    fn identifier(&mut self) -> Result<Option<Token>, ScanError> {
         while self.peek().map_or(false, Scanner::is_alpha_numeric) {
             self.advance();
         }
@@ -190,7 +184,7 @@ impl Scanner {
         let slice = &self.chars[self.start..self.current];
         let lexeme = String::from_iter(slice);
 
-        let token_type = KEYWORDS
+        let token_type = Scanner::KEYWORDS
             .get(lexeme.as_str())
             .cloned()
             .unwrap_or(TokenType::Identifier);
@@ -198,7 +192,7 @@ impl Scanner {
         self.token(token_type)
     }
 
-    fn scan_token(&mut self) -> Result<Option<Token>, ScannerError> {
+    fn scan_token(&mut self) -> Result<Option<Token>, ScanError> {
         self.start = self.current;
 
         let char = self.advance();
@@ -271,9 +265,7 @@ impl Scanner {
                 } else if Scanner::is_alpha(char) {
                     self.identifier()
                 } else {
-                    Err(ScannerError {
-                        msg: format!("[line {}] : Unknown character.", self.line),
-                    })
+                    Err(format!("[line {}] : Unknown character.", self.line))
                 }
             }
         }

@@ -1,7 +1,7 @@
 use crate::{
     callable::Callable,
     environment::Environment,
-    interpreter::{Interpreter, InterpreterError},
+    interpreter::{InterpretError, Interpreter},
     object::Object,
     stmt::FunctionStmt,
 };
@@ -31,7 +31,7 @@ impl Callable for Function {
         &self,
         interpreter: &mut Interpreter,
         arguments: Vec<Object>,
-    ) -> Result<Object, InterpreterError> {
+    ) -> Result<Object, InterpretError> {
         let environment = Environment::new(Some(self.closure.clone()));
 
         for i in 0..self.declaration.params.len() {
