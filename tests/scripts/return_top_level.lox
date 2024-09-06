@@ -1,0 +1,3 @@
+return "at top level";
+------ error ------
+[line 1] <Token { token_type: Return, lexeme: "return", literal: Nil, line: 1 }> : Can't return from top-level code.

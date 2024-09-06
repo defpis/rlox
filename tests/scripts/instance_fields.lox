@@ -1,0 +1,6 @@
+class Bagel {}
+var bagel = Bagel();
+bagel.a = 1;
+print bagel.a;
+------ output ------
+1

@@ -1,12 +1,12 @@
 use crate::{
     expr::{
-        AssignExpr, BinaryExpr, CallExpr, Expr, GroupingExpr, HashExpr, LiteralExpr, LogicalExpr,
-        UnaryExpr, VariableExpr,
+        AssignExpr, BinaryExpr, CallExpr, Expr, GetExpr, GroupingExpr, HashExpr, LiteralExpr,
+        LogicalExpr, SetExpr, ThisExpr, UnaryExpr, VariableExpr,
     },
     object::Object,
     stmt::{
-        BlockStmt, ExpressionStmt, FunctionStmt, IfStmt, PrintStmt, ReturnStmt, Stmt, VarStmt,
-        WhileStmt,
+        BlockStmt, ClassStmt, ExpressionStmt, FunctionStmt, IfStmt, PrintStmt, ReturnStmt, Stmt,
+        VarStmt, WhileStmt,
     },
     token::{Token, TokenType},
 };
@@ -58,7 +58,7 @@ impl Parser {
         if !self.is_at_end() {
             self.current += 1;
         }
-        return self.previous();
+        self.previous()
     }
 
     fn check(&self, token_type: &TokenType) -> bool {
@@ -85,16 +85,19 @@ impl Parser {
     }
 
     fn declaration(&mut self) -> Result<Rc<Stmt>, ParseError> {
+        if self.find(&[TokenType::Class]) {
+            return self.class_declaration();
+        }
         if self.find(&[TokenType::Var]) {
             return self.var_declaration();
         }
         if self.find(&[TokenType::Fun]) {
-            return self.function("function");
+            return Ok(Rc::new(Stmt::Function(self.function("function")?)));
         }
         self.statement()
     }
 
-    fn function(&mut self, kind: &str) -> Result<Rc<Stmt>, ParseError> {
+    fn function(&mut self, kind: &str) -> Result<FunctionStmt, ParseError> {
         let name = self.consume(
             &TokenType::Identifier,
             format!("Expect {} name.", kind).as_str(),
@@ -131,9 +134,21 @@ impl Parser {
 
         let body = self.block()?;
 
-        Ok(Rc::new(Stmt::Function(FunctionStmt::new(
-            name, parameters, body,
-        ))))
+        Ok(FunctionStmt::new(name, parameters, body))
+    }
+
+    fn class_declaration(&mut self) -> Result<Rc<Stmt>, ParseError> {
+        let name = self.consume(&TokenType::Identifier, "Expect class name.")?;
+        self.consume(&TokenType::LeftBrace, "Expect '{' before class body.")?;
+
+        let mut methods: Vec<FunctionStmt> = Vec::new();
+        while !self.check(&TokenType::RightBrace) {
+            methods.push(self.function("method")?)
+        }
+
+        self.consume(&TokenType::RightBrace, "Expect '}' before class body.")?;
+
+        Ok(Rc::new(Stmt::Class(ClassStmt::new(name, methods))))
     }
 
     fn var_declaration(&mut self) -> Result<Rc<Stmt>, ParseError> {
@@ -296,6 +311,11 @@ impl Parser {
             let value = self.assignment()?;
 
             return match &expr.expr {
+                Expr::Get(expr) => Ok(Rc::new(HashExpr::new(Expr::Set(SetExpr::new(
+                    expr.object.clone(),
+                    expr.name.clone(),
+                    value,
+                ))))),
                 Expr::Variable(expr) => Ok(Rc::new(HashExpr::new(Expr::Assign(AssignExpr::new(
                     expr.name.clone(),
                     value,
@@ -417,6 +437,10 @@ impl Parser {
         loop {
             if self.find(&[TokenType::LeftParen]) {
                 expr = self.finish_call(expr)?;
+            } else if self.find(&[TokenType::Dot]) {
+                let name =
+                    self.consume(&TokenType::Identifier, "Expect property name after '.'.")?;
+                expr = Rc::new(HashExpr::new(Expr::Get(GetExpr::new(expr, name))));
             } else {
                 break;
             }
@@ -455,6 +479,9 @@ impl Parser {
         let token = self.advance();
 
         match token.as_ref().token_type {
+            TokenType::This => Ok(Rc::new(HashExpr::new(Expr::This(ThisExpr::new(
+                self.previous(),
+            ))))),
             TokenType::False => Ok(Rc::new(HashExpr::new(Expr::Literal(LiteralExpr::new(
                 Object::Boolean(false),
             ))))),

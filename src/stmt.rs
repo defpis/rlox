@@ -11,6 +11,7 @@ pub enum Stmt {
     While(WhileStmt),
     Function(FunctionStmt),
     Return(ReturnStmt),
+    Class(ClassStmt),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -113,5 +114,17 @@ pub struct ReturnStmt {
 impl ReturnStmt {
     pub fn new(keyword: Rc<Token>, value: Option<Rc<HashExpr>>) -> ReturnStmt {
         ReturnStmt { keyword, value }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct ClassStmt {
+    pub name: Rc<Token>,
+    pub methods: Vec<FunctionStmt>,
+}
+
+impl ClassStmt {
+    pub fn new(name: Rc<Token>, methods: Vec<FunctionStmt>) -> ClassStmt {
+        ClassStmt { name, methods }
     }
 }

@@ -1,0 +1,4 @@
+var a = "first";
+var a = "second";
+------ error ------
+[line 2] <Token { token_type: Identifier, lexeme: "a", literal: Nil, line: 2 }> : Already a variable with this name in this scope.

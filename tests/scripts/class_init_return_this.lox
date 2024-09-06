@@ -1,0 +1,12 @@
+class Foo {
+  init() {
+    return;
+  }
+}
+
+var foo = Foo();
+print foo;
+print foo.init();
+------ output ------
+<instance of Foo>
+<instance of Foo>

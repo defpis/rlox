@@ -1,9 +1,14 @@
-use crate::{interpreter::InterpretError, object::Object, token::Token};
+use crate::{interpreter::InterpretError, object::Object};
 use std::{
     cell::RefCell,
     collections::HashMap,
     rc::{Rc, Weak},
 };
+
+pub trait Stateful {
+    fn get(&self, key: &str) -> Result<Object, InterpretError>;
+    fn set(&mut self, key: &str, value: Object) -> Result<(), InterpretError>;
+}
 
 #[derive(Debug)]
 pub struct Environment {
@@ -25,72 +30,69 @@ impl Environment {
         instance
     }
 
-    // fn shared_from_this(&self) -> Rc<RefCell<Environment>> {
-    //     self.this.upgrade().unwrap()
-    // }
-
     pub fn define(&mut self, key: String, value: Object) {
         self.values.insert(key, value);
     }
 
-    pub fn get(&self, name: &Token) -> Result<Object, InterpretError> {
-        if let Some(value) = self.values.get(&name.lexeme).cloned() {
-            return Ok(value);
-        }
-
-        if let Some(parent) = self.enclosing.as_ref() {
-            return parent.borrow().get(name);
-        }
-
-        Err(InterpretError::Error(format!(
-            "[line {}] <{:?}> : Undefined variable `{}`.",
-            name.line, name, name.lexeme,
-        )))
-    }
-
-    pub fn get_at(&self, distance: usize, name: &Token) -> Result<Object, InterpretError> {
+    pub fn get_at(&self, distance: usize, key: &str) -> Result<Object, InterpretError> {
         if distance > 0 {
             if let Some(ref enclosing) = self.enclosing {
-                enclosing.borrow().get_at(distance - 1, name)
+                enclosing.borrow().get_at(distance - 1, key)
             } else {
                 panic!("Unreachable error!")
             }
         } else {
-            self.get(name)
+            self.get(key)
         }
     }
 
-    pub fn assign(&mut self, name: &Token, value: Object) -> Result<(), InterpretError> {
-        if self.values.contains_key(&name.lexeme) {
-            self.values.insert(name.lexeme.clone(), value);
-            return Ok(());
-        }
-
-        if let Some(enclosing) = self.enclosing.as_ref() {
-            enclosing.borrow_mut().assign(name, value)?;
-            return Ok(());
-        }
-
-        Err(InterpretError::Error(format!(
-            "[line {}] <{:?}> : Undefined variable `{}`.",
-            name.line, name, name.lexeme,
-        )))
-    }
-
-    pub fn assign_at(
+    pub fn set_at(
         &mut self,
         distance: usize,
-        name: &Token,
+        key: &str,
         value: Object,
     ) -> Result<(), InterpretError> {
         if distance > 0 {
             if let Some(ref enclosing) = self.enclosing {
-                enclosing.borrow_mut().assign_at(distance - 1, name, value)
+                enclosing.borrow_mut().set_at(distance - 1, key, value)
             } else {
                 panic!("Unreachable error!")
             }
         } else {
-            self.assign(name, value)
+            self.set(key, value)
         }
+    }
+}
+
+impl Stateful for Environment {
+    fn get(&self, key: &str) -> Result<Object, InterpretError> {
+        if let Some(value) = self.values.get(key).cloned() {
+            return Ok(value);
+        }
+
+        if let Some(parent) = self.enclosing.as_ref() {
+            return parent.borrow().get(key);
+        }
+
+        Err(InterpretError::Error(format!(
+            "Undefined variable `{}`.",
+            key,
+        )))
+    }
+    fn set(&mut self, key: &str, value: Object) -> Result<(), InterpretError> {
+        if self.values.contains_key(key) {
+            self.values.insert(key.to_string(), value);
+            return Ok(());
+        }
+
+        if let Some(enclosing) = self.enclosing.as_ref() {
+            enclosing.borrow_mut().set(key, value)?;
+            return Ok(());
+        }
+
+        Err(InterpretError::Error(format!(
+            "Undefined variable `{}`.",
+            key,
+        )))
     }
 }

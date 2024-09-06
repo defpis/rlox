@@ -1,8 +1,8 @@
 use crate::{
-    callable::Clock,
-    environment::Environment,
+    class::Class,
+    environment::{Environment, Stateful},
     expr::{Expr, HashExpr},
-    function::Function,
+    function::{Clock, Function},
     object::Object,
     resolver::Resolver,
     stmt::Stmt,
@@ -49,9 +49,10 @@ impl Interpreter {
     fn new(locals: Rc<RefCell<HashMap<HashExpr, usize>>>) -> Interpreter {
         let globals = Environment::new(None);
 
-        globals
-            .borrow_mut()
-            .define(format!("clock"), Object::Callable(Rc::new(Clock::new())));
+        globals.borrow_mut().define(
+            "clock".to_string(),
+            Object::Function(Rc::new(RefCell::new(Clock::new()))),
+        );
 
         let environment = globals.clone();
 
@@ -68,9 +69,11 @@ impl Interpreter {
         hash_expr: &HashExpr,
     ) -> Result<Object, InterpretError> {
         if let Some(distance) = self.locals.borrow().get(hash_expr).cloned() {
-            self.environment.borrow().get_at(distance, name)
+            self.environment
+                .borrow()
+                .get_at(distance, &name.lexeme.clone())
         } else {
-            self.globals.borrow().get(name)
+            self.globals.borrow().get(&name.lexeme.clone())
         }
     }
 
@@ -93,16 +96,18 @@ impl Interpreter {
         for statement in statements {
             match self.execute(&statement) {
                 Ok(_) => (),
-                Err(err) => match err {
-                    InterpretError::Return(value) => {
-                        self.environment = previous;
-                        return Ok(value);
+                Err(err) => {
+                    return match err {
+                        InterpretError::Return(value) => {
+                            self.environment = previous;
+                            Ok(value)
+                        }
+                        InterpretError::Error(message) => {
+                            self.environment = previous;
+                            Err(InterpretError::Error(message))
+                        }
                     }
-                    InterpretError::Error(message) => {
-                        self.environment = previous;
-                        return Err(InterpretError::Error(message));
-                    }
-                },
+                }
             }
         }
         self.environment = previous;
@@ -211,9 +216,9 @@ impl Visitor<Object, InterpretError> for Interpreter {
                 if let Some(distance) = self.locals.borrow().get(hash_expr).cloned() {
                     self.environment
                         .borrow_mut()
-                        .assign_at(distance, &expr.name, value)?
+                        .set_at(distance, &expr.name.lexeme, value)?
                 } else {
-                    self.globals.borrow_mut().assign(&expr.name, value)?
+                    self.globals.borrow_mut().set(&expr.name.lexeme, value)?
                 }
                 Ok(Object::Nil)
             }
@@ -247,17 +252,29 @@ impl Visitor<Object, InterpretError> for Interpreter {
                 }
 
                 match callee {
-                    Object::Callable(function) => {
-                        if arguments.len() != function.arity() {
+                    Object::Function(function) => {
+                        if arguments.len() != function.borrow().arity() {
                             return Err(InterpretError::Error(format!(
                                 "[line {}] <{:?}> : Expected {} arguments but got {}.",
                                 expr.paren.line,
                                 expr.paren,
-                                function.arity(),
+                                function.borrow().arity(),
                                 arguments.len()
                             )));
                         }
-                        function.call(self, arguments)
+                        function.borrow().call(self, arguments)
+                    }
+                    Object::Class(class) => {
+                        if arguments.len() != class.borrow().arity() {
+                            return Err(InterpretError::Error(format!(
+                                "[line {}] <{:?}> : Expected {} arguments but got {}.",
+                                expr.paren.line,
+                                expr.paren,
+                                class.borrow().arity(),
+                                arguments.len()
+                            )));
+                        }
+                        class.borrow().call(self, arguments)
                     }
                     _ => Err(InterpretError::Error(format!(
                         "[line {}] <{:?}> : Can only call functions and classes.",
@@ -265,6 +282,31 @@ impl Visitor<Object, InterpretError> for Interpreter {
                     ))),
                 }
             }
+            Expr::Get(expr) => match self.evaluate(&expr.object)? {
+                Object::Instance(instance) => instance.borrow().get(&expr.name.lexeme),
+                Object::Class(class) => class.borrow().get(&expr.name.lexeme),
+                _ => Err(InterpretError::Error(format!(
+                    "[line {}] <{:?}> : Only instances have properties.",
+                    expr.name.line, expr.name
+                ))),
+            },
+            Expr::Set(expr) => match self.evaluate(&expr.object)? {
+                Object::Instance(instance) => {
+                    let value = self.evaluate(&expr.value)?;
+                    instance.borrow_mut().set(&expr.name.lexeme, value)?;
+                    Ok(Object::Nil)
+                }
+                Object::Class(class) => {
+                    let value = self.evaluate(&expr.value)?;
+                    class.borrow_mut().set(&expr.name.lexeme, value)?;
+                    Ok(Object::Nil)
+                }
+                _ => Err(InterpretError::Error(format!(
+                    "[line {}] <{:?}> : Only instances have fields.",
+                    expr.name.line, expr.name
+                ))),
+            },
+            Expr::This(expr) => self.lookup_variable(&expr.keyword, hash_expr),
         }
     }
     fn visit_stmt(&mut self, stmt: &Stmt) -> Result<(), InterpretError> {
@@ -310,10 +352,11 @@ impl Visitor<Object, InterpretError> for Interpreter {
                 Ok(())
             }
             Stmt::Function(stmt) => {
-                let function = Function::new(stmt.clone(), self.environment.clone());
+                let function =
+                    Function::new(Rc::new(stmt.clone()), self.environment.clone(), false);
                 self.environment.borrow_mut().define(
                     stmt.name.lexeme.clone(),
-                    Object::Callable(Rc::new(function)),
+                    Object::Function(Rc::new(RefCell::new(function))),
                 );
                 Ok(())
             }
@@ -323,6 +366,22 @@ impl Visitor<Object, InterpretError> for Interpreter {
                     value = self.evaluate(expr)?;
                 }
                 Err(InterpretError::Return(value))
+            }
+            Stmt::Class(stmt) => {
+                let mut methods: HashMap<String, Function> = HashMap::new();
+                for method in &stmt.methods {
+                    let function = Function::new(
+                        Rc::new(method.clone()),
+                        self.environment.clone(),
+                        method.name.lexeme == "init",
+                    );
+                    methods.insert(method.name.lexeme.clone(), function);
+                }
+                let class = Class::new(stmt.name.clone(), methods);
+                self.environment
+                    .borrow_mut()
+                    .define(stmt.name.lexeme.clone(), Object::Class(class));
+                Ok(())
             }
         }
     }

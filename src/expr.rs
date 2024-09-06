@@ -42,6 +42,9 @@ pub enum Expr {
     Assign(AssignExpr),
     Logical(LogicalExpr),
     Call(CallExpr),
+    Get(GetExpr),
+    Set(SetExpr),
+    This(ThisExpr),
 }
 
 impl fmt::Display for Expr {
@@ -177,5 +180,45 @@ impl CallExpr {
             paren,
             arguments,
         }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct GetExpr {
+    pub object: Rc<HashExpr>,
+    pub name: Rc<Token>,
+}
+
+impl GetExpr {
+    pub fn new(object: Rc<HashExpr>, name: Rc<Token>) -> GetExpr {
+        GetExpr { object, name }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct SetExpr {
+    pub object: Rc<HashExpr>,
+    pub name: Rc<Token>,
+    pub value: Rc<HashExpr>,
+}
+
+impl SetExpr {
+    pub fn new(object: Rc<HashExpr>, name: Rc<Token>, value: Rc<HashExpr>) -> SetExpr {
+        SetExpr {
+            object,
+            name,
+            value,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct ThisExpr {
+    pub keyword: Rc<Token>,
+}
+
+impl ThisExpr {
+    pub fn new(keyword: Rc<Token>) -> ThisExpr {
+        ThisExpr { keyword }
     }
 }

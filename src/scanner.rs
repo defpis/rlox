@@ -35,7 +35,7 @@ struct Scanner {
 }
 
 impl Scanner {
-    const KEYWORDS: LazyLock<HashMap<&str, TokenType>> = LazyLock::new(|| {
+    const KEYWORDS: LazyLock<HashMap<&'static str, TokenType>> = LazyLock::new(|| {
         let mut m = HashMap::new();
 
         m.insert("and", TokenType::And);
@@ -80,7 +80,7 @@ impl Scanner {
     }
 
     fn eof(&self) -> Token {
-        Token::new(TokenType::Eof, format!(""), Object::Nil, self.line)
+        Token::new(TokenType::Eof, "".to_string(), Object::Nil, self.line)
     }
 
     fn is_at_end(&self) -> bool {

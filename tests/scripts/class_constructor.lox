@@ -1,0 +1,7 @@
+class A {
+  init(n) {} 
+}
+var a = A(1);
+print a;
+------ output ------
+<instance of A>

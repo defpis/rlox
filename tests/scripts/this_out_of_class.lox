@@ -1,0 +1,3 @@
+print this;
+------ error ------
+[line 1] <Token { token_type: This, lexeme: "this", literal: Nil, line: 1 }> : Can't use 'this' outside of a class.
