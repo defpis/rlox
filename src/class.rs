@@ -13,21 +13,29 @@ use std::{
     rc::{Rc, Weak},
 };
 
-pub trait IsClass: fmt::Debug + fmt::Display + IsFunction + IsInstance {}
+pub trait IsClass: fmt::Debug + fmt::Display + IsFunction + IsInstance {
+    fn find_method(&self, name: &str) -> Option<Rc<Function>>;
+}
 
 #[derive(Debug)]
 pub struct Class {
     this: Weak<RefCell<Class>>,
     pub name: Rc<Token>,
-    methods: HashMap<String, Function>,
+    superclass: Option<Rc<RefCell<dyn IsClass>>>,
+    methods: HashMap<String, Rc<Function>>,
     fields: HashMap<String, Object>,
 }
 
 impl Class {
-    pub fn new(name: Rc<Token>, methods: HashMap<String, Function>) -> Rc<RefCell<Class>> {
+    pub fn new(
+        name: Rc<Token>,
+        superclass: Option<Rc<RefCell<dyn IsClass>>>,
+        methods: HashMap<String, Rc<Function>>,
+    ) -> Rc<RefCell<Class>> {
         let instance = Rc::new(RefCell::new(Class {
             this: Weak::new(),
             name,
+            superclass,
             methods,
             fields: HashMap::new(),
         }));
@@ -39,10 +47,6 @@ impl Class {
 
     fn shared_from_this(&self) -> Rc<RefCell<Class>> {
         self.this.upgrade().unwrap()
-    }
-
-    pub fn find_method(&self, name: &str) -> Option<&Function> {
-        self.methods.get(name)
     }
 }
 
@@ -99,4 +103,16 @@ impl fmt::Display for Class {
 
 impl IsInstance for Class {}
 
-impl IsClass for Class {}
+impl IsClass for Class {
+    fn find_method(&self, key: &str) -> Option<Rc<Function>> {
+        if let Some(method) = self.methods.get(key) {
+            return Some(method.clone());
+        }
+
+        if let Some(ref superclass) = self.superclass {
+            return superclass.borrow().find_method(key);
+        }
+
+        None
+    }
+}

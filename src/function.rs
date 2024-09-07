@@ -1,6 +1,6 @@
 use crate::{
     environment::{Environment, Stateful},
-    instance::Instance,
+    instance::IsInstance,
     interpreter::{InterpretError, Interpreter},
     object::Object,
     stmt::FunctionStmt,
@@ -19,7 +19,7 @@ pub trait IsFunction: fmt::Debug + fmt::Display {
 
     fn bind(
         &self,
-        _: Rc<RefCell<Instance>>,
+        _: Rc<RefCell<dyn IsInstance>>,
     ) -> Result<Rc<RefCell<dyn IsFunction>>, InterpretError> {
         Err(InterpretError::Error("Unreachable error!".to_string()))
     }
@@ -101,7 +101,7 @@ impl IsFunction for Function {
 
     fn bind(
         &self,
-        instance: Rc<RefCell<Instance>>,
+        instance: Rc<RefCell<dyn IsInstance>>,
     ) -> Result<Rc<RefCell<dyn IsFunction>>, InterpretError> {
         let environment = Environment::new(Some(self.closure.clone()));
         environment

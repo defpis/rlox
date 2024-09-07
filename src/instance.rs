@@ -1,5 +1,8 @@
 use crate::{
-    class::Class, environment::Stateful, function::IsFunction, interpreter::InterpretError,
+    class::{Class, IsClass},
+    environment::Stateful,
+    function::IsFunction,
+    interpreter::InterpretError,
     object::Object,
 };
 use std::{

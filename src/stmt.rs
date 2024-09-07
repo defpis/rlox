@@ -120,11 +120,20 @@ impl ReturnStmt {
 #[derive(Debug, PartialEq, Clone)]
 pub struct ClassStmt {
     pub name: Rc<Token>,
+    pub superclass: Option<HashExpr>,
     pub methods: Vec<FunctionStmt>,
 }
 
 impl ClassStmt {
-    pub fn new(name: Rc<Token>, methods: Vec<FunctionStmt>) -> ClassStmt {
-        ClassStmt { name, methods }
+    pub fn new(
+        name: Rc<Token>,
+        superclass: Option<HashExpr>,
+        methods: Vec<FunctionStmt>,
+    ) -> ClassStmt {
+        ClassStmt {
+            name,
+            superclass,
+            methods,
+        }
     }
 }

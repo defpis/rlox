@@ -1,7 +1,7 @@
 use crate::{
     expr::{
         AssignExpr, BinaryExpr, CallExpr, Expr, GetExpr, GroupingExpr, HashExpr, LiteralExpr,
-        LogicalExpr, SetExpr, ThisExpr, UnaryExpr, VariableExpr,
+        LogicalExpr, SetExpr, SuperExpr, ThisExpr, UnaryExpr, VariableExpr,
     },
     object::Object,
     stmt::{
@@ -139,6 +139,13 @@ impl Parser {
 
     fn class_declaration(&mut self) -> Result<Rc<Stmt>, ParseError> {
         let name = self.consume(&TokenType::Identifier, "Expect class name.")?;
+
+        let mut superclass: Option<HashExpr> = None;
+        if self.find(&[TokenType::Less]) {
+            let name = self.consume(&TokenType::Identifier, "Expect superclass name.")?;
+            superclass = Some(HashExpr::new(Expr::Variable(VariableExpr::new(name))));
+        }
+
         self.consume(&TokenType::LeftBrace, "Expect '{' before class body.")?;
 
         let mut methods: Vec<FunctionStmt> = Vec::new();
@@ -148,7 +155,9 @@ impl Parser {
 
         self.consume(&TokenType::RightBrace, "Expect '}' before class body.")?;
 
-        Ok(Rc::new(Stmt::Class(ClassStmt::new(name, methods))))
+        Ok(Rc::new(Stmt::Class(ClassStmt::new(
+            name, superclass, methods,
+        ))))
     }
 
     fn var_declaration(&mut self) -> Result<Rc<Stmt>, ParseError> {
@@ -479,6 +488,15 @@ impl Parser {
         let token = self.advance();
 
         match token.as_ref().token_type {
+            TokenType::Super => {
+                let keyword = self.previous();
+                self.consume(&TokenType::Dot, "Expect '.' after 'super'.")?;
+                let method =
+                    self.consume(&TokenType::Identifier, "Expect superclass method name.")?;
+                Ok(Rc::new(HashExpr::new(Expr::Super(SuperExpr::new(
+                    keyword, method,
+                )))))
+            }
             TokenType::This => Ok(Rc::new(HashExpr::new(Expr::This(ThisExpr::new(
                 self.previous(),
             ))))),

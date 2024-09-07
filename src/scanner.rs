@@ -12,10 +12,11 @@ pub fn scan_tokens(code: &str) -> Vec<Rc<Token>> {
 
     while !scanner.is_at_end() {
         match scanner.scan_token() {
-            Ok(token) => match token {
-                Some(token) => tokens.push(Rc::new(token)),
-                None => (), // Skip
-            },
+            Ok(token) => {
+                if let Some(token) = token {
+                    tokens.push(Rc::new(token))
+                }
+            }
             Err(err) => panic!("{}", err),
         }
     }

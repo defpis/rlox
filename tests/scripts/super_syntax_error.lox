@@ -1,0 +1,3 @@
+print super;
+------ error ------
+[line 1] <Token { token_type: Semicolon, lexeme: ";", literal: Nil, line: 1 }> : Expect '.' after 'super'.

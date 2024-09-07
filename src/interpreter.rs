@@ -1,8 +1,8 @@
 use crate::{
-    class::Class,
+    class::{Class, IsClass},
     environment::{Environment, Stateful},
     expr::{Expr, HashExpr},
-    function::{Clock, Function},
+    function::{Clock, Function, IsFunction},
     object::Object,
     resolver::Resolver,
     stmt::Stmt,
@@ -19,12 +19,11 @@ pub fn interpret(statements: &Vec<Rc<Stmt>>) {
     let mut interpreter = Interpreter::new(locals);
 
     for statement in statements {
-        match interpreter.execute(statement) {
-            Ok(_) => (),
-            Err(err) => match err {
-                InterpretError::Return(_) => panic!("Unreachable error!"),
+        if let Err(err) = interpreter.execute(statement) {
+            match err {
                 InterpretError::Error(message) => panic!("{}", message),
-            },
+                _ => panic!("Unreachable error!"),
+            }
         }
     }
 }
@@ -94,20 +93,17 @@ impl Interpreter {
         let previous = self.environment.clone();
         self.environment = environment;
         for statement in statements {
-            match self.execute(&statement) {
-                Ok(_) => (),
-                Err(err) => {
-                    return match err {
-                        InterpretError::Return(value) => {
-                            self.environment = previous;
-                            Ok(value)
-                        }
-                        InterpretError::Error(message) => {
-                            self.environment = previous;
-                            Err(InterpretError::Error(message))
-                        }
+            if let Err(err) = self.execute(&statement) {
+                return match err {
+                    InterpretError::Return(value) => {
+                        self.environment = previous;
+                        Ok(value)
                     }
-                }
+                    InterpretError::Error(message) => {
+                        self.environment = previous;
+                        Err(InterpretError::Error(message))
+                    }
+                };
             }
         }
         self.environment = previous;
@@ -132,7 +128,7 @@ impl Visitor<Object, InterpretError> for Interpreter {
                         ))),
                     },
                     TokenType::Bang => Ok(Object::Boolean(!right.is_truthy())),
-                    _ => panic!("Unreachable error!"),
+                    _ => Err(InterpretError::Error("Unreachable error!".to_string())),
                 }
             }
             Expr::Binary(expr) => {
@@ -207,7 +203,7 @@ impl Visitor<Object, InterpretError> for Interpreter {
                     },
                     TokenType::BangEqual => Ok(Object::Boolean(left != right)),
                     TokenType::EqualEqual => Ok(Object::Boolean(left == right)),
-                    _ => panic!("Unreachable error!"),
+                    _ => Err(InterpretError::Error("Unreachable error!".to_string())),
                 }
             }
             Expr::Variable(expr) => Ok(self.lookup_variable(&expr.name, hash_expr))?,
@@ -238,7 +234,7 @@ impl Visitor<Object, InterpretError> for Interpreter {
                             return Ok(left);
                         }
                     }
-                    _ => panic!("Unreachable error!"),
+                    _ => return Err(InterpretError::Error("Unreachable error!".to_string())),
                 }
 
                 self.evaluate(&expr.right)
@@ -307,6 +303,23 @@ impl Visitor<Object, InterpretError> for Interpreter {
                 ))),
             },
             Expr::This(expr) => self.lookup_variable(&expr.keyword, hash_expr),
+            Expr::Super(expr) => {
+                if let Some(distance) = self.locals.borrow().get(hash_expr).cloned() {
+                    let superclass = self.environment.borrow().get_at(distance, "super")?;
+                    let object = self.environment.borrow().get_at(distance - 1, "this")?;
+                    if let (Object::Class(class), Object::Instance(instance)) = (superclass, object)
+                    {
+                        if let Some(method) = class.borrow().find_method(&expr.method.lexeme) {
+                            return Ok(Object::Function(method.bind(instance)?));
+                        }
+                        return Err(InterpretError::Error(format!(
+                            "[line {}] <{:?}> : Undefined superclass method '{}'.",
+                            expr.method.line, expr.method, expr.method.lexeme
+                        )));
+                    }
+                }
+                Err(InterpretError::Error("Unreachable error!".to_string()))
+            }
         }
     }
     fn visit_stmt(&mut self, stmt: &Stmt) -> Result<(), InterpretError> {
@@ -368,16 +381,47 @@ impl Visitor<Object, InterpretError> for Interpreter {
                 Err(InterpretError::Return(value))
             }
             Stmt::Class(stmt) => {
-                let mut methods: HashMap<String, Function> = HashMap::new();
+                let mut superclass: Option<Rc<RefCell<dyn IsClass>>> = None;
+                if let Some(ref hash_expr) = stmt.superclass {
+                    let value = self.evaluate(&hash_expr)?;
+                    match value {
+                        Object::Class(class) => {
+                            self.environment = Environment::new(Some(self.environment.clone()));
+                            self.environment
+                                .borrow_mut()
+                                .define("super".to_string(), Object::Class(class.clone()));
+                            superclass = Some(class);
+                        }
+                        _ => {
+                            return if let Expr::Variable(ref expr) = hash_expr.expr {
+                                Err(InterpretError::Error(format!(
+                                    "[line {}] <{:?}> : Superclass must be a class.",
+                                    expr.name.line, expr
+                                )))
+                            } else {
+                                Err(InterpretError::Error("Unreachable error!".to_string()))
+                            }
+                        }
+                    }
+                }
+
+                let mut methods: HashMap<String, Rc<Function>> = HashMap::new();
                 for method in &stmt.methods {
                     let function = Function::new(
                         Rc::new(method.clone()),
                         self.environment.clone(),
                         method.name.lexeme == "init",
                     );
-                    methods.insert(method.name.lexeme.clone(), function);
+                    methods.insert(method.name.lexeme.clone(), Rc::new(function));
                 }
-                let class = Class::new(stmt.name.clone(), methods);
+
+                if let Some(_) = stmt.superclass {
+                    if let Some(ref enclosing) = self.environment.clone().borrow().enclosing {
+                        self.environment = enclosing.clone()
+                    }
+                }
+
+                let class = Class::new(stmt.name.clone(), superclass, methods);
                 self.environment
                     .borrow_mut()
                     .define(stmt.name.lexeme.clone(), Object::Class(class));

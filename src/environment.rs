@@ -13,7 +13,7 @@ pub trait Stateful {
 #[derive(Debug)]
 pub struct Environment {
     this: Weak<RefCell<Environment>>,
-    enclosing: Option<Rc<RefCell<Environment>>>,
+    pub enclosing: Option<Rc<RefCell<Environment>>>,
     values: HashMap<String, Object>,
 }
 
@@ -39,7 +39,7 @@ impl Environment {
             if let Some(ref enclosing) = self.enclosing {
                 enclosing.borrow().get_at(distance - 1, key)
             } else {
-                panic!("Unreachable error!")
+                Err(InterpretError::Error("Unreachable error!".to_string()))
             }
         } else {
             self.get(key)
@@ -56,7 +56,7 @@ impl Environment {
             if let Some(ref enclosing) = self.enclosing {
                 enclosing.borrow_mut().set_at(distance - 1, key, value)
             } else {
-                panic!("Unreachable error!")
+                Err(InterpretError::Error("Unreachable error!".to_string()))
             }
         } else {
             self.set(key, value)

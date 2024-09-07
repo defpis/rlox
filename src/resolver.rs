@@ -20,6 +20,7 @@ enum FunctionType {
 enum ClassType {
     None,
     Class,
+    Subclass,
 }
 
 pub struct Resolver {
@@ -42,9 +43,8 @@ impl Resolver {
     pub fn resolve(&mut self, statements: &Vec<Rc<Stmt>>) -> Rc<RefCell<HashMap<HashExpr, usize>>> {
         self.begin_scope();
         for statement in statements {
-            match self.visit_stmt(statement) {
-                Ok(_) => (),
-                Err(err) => panic!("{}", err),
+            if let Err(err) = self.visit_stmt(statement) {
+                panic!("{}", err);
             }
         }
         self.end_scope();
@@ -183,6 +183,22 @@ impl Visitor<(), ResolveError> for Resolver {
                 self.resolve_local(hash_expr, &expr.keyword);
                 Ok(())
             }
+            Expr::Super(expr) => {
+                if self.current_class == ClassType::None {
+                    return Err(format!(
+                        "[line {}] <{:?}> : Can't use 'super' outside of a class.",
+                        expr.keyword.line, expr.keyword
+                    ));
+                } else if self.current_class != ClassType::Subclass {
+                    return Err(format!(
+                        "[line {}] <{:?}> : Can't use 'super' in a class with no superclass.",
+                        expr.keyword.line, expr.keyword
+                    ));
+                }
+
+                self.resolve_local(hash_expr, &expr.keyword);
+                Ok(())
+            }
         }
     }
 
@@ -203,7 +219,7 @@ impl Visitor<(), ResolveError> for Resolver {
 
                 if let Some(ref hash_expr) = stmt.value {
                     match &hash_expr.expr {
-                        Expr::This(_) => (),
+                        Expr::This(_) => (), // Skip
                         _ => {
                             if self.current_function == FunctionType::Initializer {
                                 return Err(format!(
@@ -256,6 +272,25 @@ impl Visitor<(), ResolveError> for Resolver {
 
                 self.declare(&stmt.name)?;
 
+                if let Some(ref hash_expr) = stmt.superclass {
+                    if let Expr::Variable(ref expr) = hash_expr.expr {
+                        if expr.name.lexeme == stmt.name.lexeme {
+                            return Err(format!(
+                                "[line {}] <{:?}> : A class can't inherit from itself.",
+                                stmt.name.line, stmt.name
+                            ));
+                        }
+                    }
+
+                    self.current_class = ClassType::Subclass;
+                    self.visit_expr(hash_expr)?;
+
+                    self.begin_scope();
+                    if let Some(scope) = self.peek() {
+                        scope.insert("super".to_string(), true);
+                    }
+                }
+
                 self.begin_scope();
                 if let Some(scope) = self.peek() {
                     scope.insert("this".to_string(), true);
@@ -272,6 +307,10 @@ impl Visitor<(), ResolveError> for Resolver {
                 }
 
                 self.end_scope();
+
+                if let Some(_) = stmt.superclass {
+                    self.end_scope();
+                }
 
                 self.define(&stmt.name)?;
 

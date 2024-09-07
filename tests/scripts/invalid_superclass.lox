@@ -1,0 +1,4 @@
+var NotAClass = "I am totally not a class";
+class Subclass < NotAClass {}
+------ error ------
+[line 2] <VariableExpr { name: Token { token_type: Identifier, lexeme: "NotAClass", literal: Nil, line: 2 } }> : Superclass must be a class.

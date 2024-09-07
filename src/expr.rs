@@ -45,6 +45,7 @@ pub enum Expr {
     Get(GetExpr),
     Set(SetExpr),
     This(ThisExpr),
+    Super(SuperExpr),
 }
 
 impl fmt::Display for Expr {
@@ -220,5 +221,17 @@ pub struct ThisExpr {
 impl ThisExpr {
     pub fn new(keyword: Rc<Token>) -> ThisExpr {
         ThisExpr { keyword }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct SuperExpr {
+    pub keyword: Rc<Token>,
+    pub method: Rc<Token>,
+}
+
+impl SuperExpr {
+    pub fn new(keyword: Rc<Token>, method: Rc<Token>) -> SuperExpr {
+        SuperExpr { keyword, method }
     }
 }

@@ -1,0 +1,22 @@
+class A {
+  method() {
+    print "A method";
+  }
+}
+
+class B < A {
+  method() {
+    print "B method";
+  }
+
+  test() {
+    super.unknown();
+  }
+}
+
+class C < B {}
+
+C().test();
+
+------ error ------
+[line 13] <Token { token_type: Identifier, lexeme: "unknown", literal: Nil, line: 13 }> : Undefined superclass method 'unknown'.
